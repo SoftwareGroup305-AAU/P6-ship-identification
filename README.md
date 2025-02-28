@@ -7,3 +7,6 @@ To address this issue, we aim to develop a **drone-based ship identification sys
 - **Log their position** based on image data and GPS  
 - **Report findings** to authorities for further investigation
 
+Python versions:
+- Drone interface: 3.12.6
+- CNN: 3.11.2
