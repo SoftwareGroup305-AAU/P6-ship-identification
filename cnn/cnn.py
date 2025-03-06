@@ -1,13 +1,20 @@
+from PIL import Image
+import torch
+from torchvision import transforms
+import urllib
 import torch
 import torch.nn as nn
 from torch.utils.data import dataloader
 import torch.nn.functional as f
 import torchvision
 import torchvision.transforms as transforms
+import torchvision.models.detection as detection
+
+model = detection.ssd300_vgg16(pretrained=True)#We use pretrained, and then specialize it for our purpose with more training
 
 def import_data():
     transform = transforms.Compose([
-        transforms.Resize(32, 32),
+        transforms.Resize(300, 300),
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), 
                             (0.5, 0.5, 0.5))
@@ -40,3 +47,25 @@ class CNN(nn.Module):
         image = self.pool(f.relu(self.conv2(image)))
         image = f.relu(self.fcl1(image))
         image = self.fcl2(image)
+
+class Training():
+    num_epochs = 10 #Number of passes over training data
+    model.train()
+    optimizer = torch.optim.SGD(model.parameters, lr=0.005)
+    for epoch in range(num_epochs):
+        optimizer.zero_grad()
+
+        loss_dict = model(images, targets)
+
+        losses = sum(loss for loss in loss_dict.values())
+        losses.backward()
+        optimizer.step()
+
+    print(f"Epoch [{epoch+1}/{num_epochs}] Loss: {losses.item():.4f}")
+# from PIL import Image
+# import torch
+# from torchvision import transforms
+# import urllib
+# import torch
+
+# torch.nn.Conv2d(stride=10, padding='valid', dilation=5, groups=4)We should probably look at using these params, "groups greater than 1, allows for specialization and just a tad performance"
