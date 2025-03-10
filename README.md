@@ -6,4 +6,3 @@ To address this issue, we aim to develop a **drone-based ship identification sys
 - **Identify ships using AI-based recognition**, even if AIS is off  
 - **Log their position** based on image data and GPS  
 - **Report findings** to authorities for further investigation
-
