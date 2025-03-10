@@ -6,7 +6,6 @@ from cnn.train import load_label_yolov8, train
 class TestTrain(unittest.TestCase):
     def test_load_labels_yolov8(self):
         # Arrange
-        
         expected_result = [[7, 0.69140625, 0.775, 0.5609375, 0.19609375], 
                          [10, 0.3609375, 0.3140625, 0.66328125, 0.28046875]] #based on test_label.txt
         

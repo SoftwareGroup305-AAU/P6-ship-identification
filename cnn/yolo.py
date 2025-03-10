@@ -26,27 +26,37 @@ def import_data():
     test_set = 0 # test data location
     test_data_loader = dataloader(test_set, batch_size=32, shuffle=False)
 
+class YOLO(nn.Module):
+    def __init__(self, num_classes, num_anchors, grid_size):
+        
+        self.num_classes = num_classes
+        self.num_anchors = num_anchors
+        self.grid_size = grid_size
 
-class CNN(nn.Module):
-    # number of classes to identify: {freight, fishing, empty}
-    # dont know if empty should be included in classes
-    classes = 3
+        #Backbone
+        self.backbone = nn.Sequential(
+            nn.Conv2d(3, 32, 3),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, 3),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(64),
+        )
+        #Detection head
+        self.detector = nn.Sequential(
+            nn.Conv2d(64, 128),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(128*(grid_size // 4)**2, grid_size * grid_size * (num_anchors * 5 + num_classes))
+        )
+    def forward(self, image):
+        features = self.backbone(image)
+        predictions = self.detector(features)
+        # handle prediction
 
-    # cnn definition
-    def __init__(self, classes):
-        super(CNN, self, classes).__init__()
-        self.conv1 = nn.Conv2d(3, 32, 3)
-        self.pool = nn.MaxPool2d(2)
-        self.conv2 = nn.Conv2d(32, 64, 3)
-        self.fcl1 = nn.Linear(64, 128)
-        self.fcl2 = nn.Linear(128, classes)
-
-    # cnn pipeline definition
-    def pipeline(self, image):
-        image = self.pool(f.relu(self.conv1(image)))
-        image = self.pool(f.relu(self.conv2(image)))
-        image = f.relu(self.fcl1(image))
-        image = self.fcl2(image)
 
 class Training():
     num_epochs = 10 #Number of passes over training data
