@@ -1,7 +1,7 @@
 import unittest
 import os
 
-from cnn.train import load_label_yolov8, train
+from yolo.train import load_label_yolov8, train
 
 class TestTrain(unittest.TestCase):
     def test_load_labels_yolov8(self):
