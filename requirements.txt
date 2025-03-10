@@ -15,12 +15,12 @@ nvidia-curand-cu12==10.3.5.147
 nvidia-cusolver-cu12==11.6.1.9
 nvidia-cusparse-cu12==12.3.1.170
 nvidia-cusparselt-cu12==0.6.2
-#nvidia-nccl-cu12==2.21.5
+#nvidia-nccl-cu12==2.21.5 #CANT INSTALL
 nvidia-nvjitlink-cu12==12.4.127
 nvidia-nvtx-cu12==12.4.127
 pillow==11.1.0
 sympy==1.13.1
 torch==2.6.0
 torchvision==0.21.0
-#triton==3.2.0
+#triton==3.2.0 #LINUX
 typing_extensions==4.12.2
