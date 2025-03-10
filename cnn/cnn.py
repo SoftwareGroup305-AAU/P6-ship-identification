@@ -22,7 +22,7 @@ def import_data():
 
     training_set = 0 # training data location
     training_data_loader = dataloader(training_set, batch_size=32, shuffle=True)
-
+    
     test_set = 0 # test data location
     test_data_loader = dataloader(test_set, batch_size=32, shuffle=False)
 
