@@ -12,15 +12,59 @@ import torchvision.models.detection as detection
 
 model = detection.ssd300_vgg16(pretrained=True)#We use pretrained, and then specialize it for our purpose with more training
 
-def create_target(bounding_boxes, grid_size, num_classes, anchors):
+def calculate_iou(box_1, box_2) -> float:
+    """
+    Calculates the Intersection over Union (IoU) between two boxes.
+
+    Parameters:
+        box_1 (tuple): (center_x, center_y, width, height) of the first box.
+        box_2 (tuple): (center_x, center_y, width, height) of the second box.
+
+    Returns:
+        float: IoU value between 0 and 1.
+    """
+    center_x1, center_y1, width_1, height_1 = box_1
+    center_x2, center_y2, width_2, height_2 = box_2
+
+    box_1_area = width_1*height_1
+    box_2_area = width_2*height_2
+
+    box_1_left = center_x1 - (width_1 / 2)
+    box_1_right = center_x1 + (width_1 / 2)
+    box_1_bottom = center_y1 - (height_1 / 2)
+    box_1_top = center_y1 + (height_1 / 2)
+
+    box_2_left = center_x2 - (width_2 / 2)
+    box_2_right = center_x2 + (width_2 / 2)
+    box_2_bottom = center_y2 - (height_2 / 2)
+    box_2_top = center_y2 + (height_2 / 2)
+
+    intersection_width = min(box_1_right, box_2_right) - max(box_1_left, box_2_left)
+    intersection_height = min(box_1_top, box_2_top) -max(box_1_bottom, box_2_bottom)
+
+    if intersection_width <= 0 or intersection_height <= 0:
+        return 0
+
+    intersection_area = intersection_width*intersection_height
+    union_area = box_1_area+box_2_area-intersection_area
+
+    iou = intersection_area / union_area
+    return iou
+
+def create_target(bounding_boxes, grid_size, num_classes, anchors) -> torch.Tensor:
+    """
+    creates target tensor
+
+    Parameters:
+        bounding_boxes: list of bounding boxes (center_x, center_y, width, height)
+        grid_size: size of grid
+        num_classes: number of classes
+        anchors: list of anchors (height, width)
+
+    Returns:
+        Tensor: target tensor.
+    """
     num_anchors = len(anchors)
-    """
-    Creates a zeroed 4D tensor representing the target values for each grid cell:
-    1st dimension: grid_size
-    2nd dimension: grid_size
-    3rd dimension: num_anchors
-    4th dimension: Bounding box attributes (tx, ty, tw, th, objectness) + class probabilities for each class (5 + num_classes)
-    """
     target = torch.zeros(grid_size, grid_size, num_anchors, 5 + num_classes)
     
     for bounding_box in bounding_boxes:
@@ -34,21 +78,31 @@ def create_target(bounding_boxes, grid_size, num_classes, anchors):
         x_offset = (center_x * grid_size) - grid_x
         y_offset = (center_y * grid_size) - grid_y
         
-        for anchor_index in range(num_anchors):  # Iterate over all anchor boxes
+        # find anchor width most overlap
+        max_anchor_overlap = 0
+        best_anchor_index = 0
+        for anchor_index in range(num_anchors):
             anchor_width, anchor_height = anchors[anchor_index]
-            
-            # Compute the width and height adjustments (scaled relative to anchor size)
-            target_width = torch.log(width * grid_size / anchor_width)
-            target_height = torch.log(height * grid_size / anchor_height)
-            
-            # Assign the bounding box offsets and size adjustments
-            target[grid_y, grid_x,  anchor_index, :4] = torch.tensor([x_offset, y_offset, target_width, target_height])
-            
-            # Set objectness score to 1 (since this anchor box has a corresponding ground truth box)
-            target[grid_y, grid_x, anchor_index, 4] = 1
-            
-            # One-hot encode the class label
-            target[grid_y, grid_x, anchor_index, 5 + int(class_label)] = 1
+
+            iou = calculate_iou((0, 0, anchor_width, anchor_height), (0, 0, width, height))
+
+            if (iou > max_anchor_overlap):
+                max_anchor_overlap = iou
+                best_anchor_index = anchor_index
+
+        anchor_width, anchor_height = anchors[best_anchor_index]        
+        # Compute the width and height adjustments (scaled relative to anchor size)
+        target_width = torch.log(width * grid_size / anchor_width)
+        target_height = torch.log(height * grid_size / anchor_height)
+        
+        # Assign the bounding box offsets and size adjustments
+        target[grid_y, grid_x,  best_anchor_index, :4] = torch.tensor([x_offset, y_offset, target_width, target_height])
+        
+        # Set objectness score to 1 (since this anchor box has a corresponding ground truth box)
+        target[grid_y, grid_x, best_anchor_index, 4] = 1
+        
+        # One-hot encode the class label
+        target[grid_y, grid_x, best_anchor_index, 5 + int(class_label)] = 1
     return target
 
 def import_data():
