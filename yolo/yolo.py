@@ -51,25 +51,6 @@ def create_target(bounding_boxes, grid_size, num_classes, anchors):
             target[grid_y, grid_x, anchor_index, 5 + int(class_label)] = 1
     return target
 
-
-def convert_labels_to_target(bounding_boxes, grid_size, num_classes, num_anchors):
-    target = torch.zeros((grid_size, grid_size, num_anchors, 5 + num_classes))  # (tx, ty, tw, th, obj, class_probs)
-
-    for bbox in bounding_boxes:
-        cls, cx, cy, w, h = bbox
-
-        grid_x = int(cx * grid_size)
-        grid_y = int(cy * grid_size)
-
-        tx = cx * grid_size - grid_x
-        ty = cy * grid_size - grid_y
-
-        target[grid_y, grid_x, 0, :4] = torch.tensor([tx, ty, w, h])  # Assume 1 anchor for simplicity
-        target[grid_y, grid_x, 0, 4] = 1  # Objectness score
-        target[grid_y, grid_x, 0, 5 + int(cls)] = 1  # One-hot class
-
-    return target
-
 def import_data():
     transform = transforms.Compose([
         transforms.Resize(300, 300),
