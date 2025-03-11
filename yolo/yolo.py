@@ -14,7 +14,6 @@ model = detection.ssd300_vgg16(pretrained=True)#We use pretrained, and then spec
 
 def create_target(bounding_boxes, grid_size, num_classes, anchors):
     num_anchors = len(anchors)
-    
     """
     Creates a zeroed 4D tensor representing the target values for each grid cell:
     1st dimension: grid_size
@@ -31,10 +30,6 @@ def create_target(bounding_boxes, grid_size, num_classes, anchors):
         grid_x = int(center_x * grid_size)
         grid_y = int(center_y * grid_size)
         
-        # Ensure grid indices are within bounds (clip values to valid grid positions)
-        grid_x = min(grid_size - 1, max(0, grid_x))
-        grid_y = min(grid_size - 1, max(0, grid_y))
-        
         # Compute the exact position within the grid cell (the offsets)
         x_offset = (center_x * grid_size) - grid_x
         y_offset = (center_y * grid_size) - grid_y
@@ -47,14 +42,13 @@ def create_target(bounding_boxes, grid_size, num_classes, anchors):
             target_height = torch.log(height * grid_size / anchor_height)
             
             # Assign the bounding box offsets and size adjustments
-            target[  anchor_index, :4] = torch.tensor([x_offset, y_offset, target_width, target_height])
+            target[grid_y, grid_x,  anchor_index, :4] = torch.tensor([x_offset, y_offset, target_width, target_height])
             
             # Set objectness score to 1 (since this anchor box has a corresponding ground truth box)
             target[grid_y, grid_x, anchor_index, 4] = 1
             
             # One-hot encode the class label
             target[grid_y, grid_x, anchor_index, 5 + int(class_label)] = 1
-    
     return target
 
 
