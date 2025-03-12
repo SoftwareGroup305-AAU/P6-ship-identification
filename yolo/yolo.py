@@ -51,7 +51,7 @@ def calculate_iou(box_1, box_2) -> float:
     iou = intersection_area / union_area
     return iou
 
-def create_target(bounding_boxes, grid_size, num_classes, anchors) -> torch.Tensor:
+def create_target(bounding_boxes, grid_size, num_classes, anchors):
     """
     creates target tensor
 
@@ -78,7 +78,7 @@ def create_target(bounding_boxes, grid_size, num_classes, anchors) -> torch.Tens
         x_offset = (center_x * grid_size) - grid_x
         y_offset = (center_y * grid_size) - grid_y
         
-        # find anchor width most overlap
+        # find anchor with most overlap
         max_anchor_overlap = 0
         best_anchor_index = 0
         for anchor_index in range(num_anchors):
@@ -90,11 +90,12 @@ def create_target(bounding_boxes, grid_size, num_classes, anchors) -> torch.Tens
                 max_anchor_overlap = iou
                 best_anchor_index = anchor_index
 
-        anchor_width, anchor_height = anchors[best_anchor_index]        
+        anchor_width, anchor_height = anchors[best_anchor_index]
+              
         # Compute the width and height adjustments (scaled relative to anchor size)
         target_width = torch.log(width * grid_size / anchor_width)
         target_height = torch.log(height * grid_size / anchor_height)
-        
+
         # Assign the bounding box offsets and size adjustments
         target[grid_y, grid_x,  best_anchor_index, :4] = torch.tensor([x_offset, y_offset, target_width, target_height])
         
