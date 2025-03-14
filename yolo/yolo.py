@@ -1,3 +1,4 @@
+from typing import Callable
 from PIL import Image
 import torch
 from torchvision import transforms
@@ -6,55 +7,62 @@ import torch
 import torch.nn as nn
 from torch.utils.data import dataloader
 import torch.nn.functional as f
+import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 import torchvision.models.detection as detection
 
-def calculate_iou(box_1, box_2) -> float:
-    """
-    Calculates the Intersection over Union (IoU) between two boxes.
+def calculate_iou(box1: torch.Tensor, box2: torch.Tensor):
+    x1, y1, w1, h1 = box1
+    x2, y2, w2, h2 = box2
 
-    Parameters:
-        box_1 (tuple): (center_x, center_y, width, height) of the first box.
-        box_2 (tuple): (center_x, center_y, width, height) of the second box.
+    box1_x1, box1_y1 = x1 - w1 / 2, y1 - h1 / 2
+    box1_x2, box1_y2 = x1 + w1 / 2, y1 + h1 / 2
+    box2_x1, box2_y1 = x2 - w2 / 2, y2 - h2 / 2
+    box2_x2, box2_y2 = x2 + w2 / 2, y2 + h2 / 2
 
-    Returns:
-        float: IoU value between 0 and 1.
-    """
-    center_x1, center_y1, width_1, height_1 = box_1
-    center_x2, center_y2, width_2, height_2 = box_2
+    inter_x1 = torch.max(box1_x1, box2_x1)
+    inter_y1 = torch.max(box1_y1, box2_y1)
+    inter_x2 = torch.min(box1_x2, box2_x2)
+    inter_y2 = torch.min(box1_y2, box2_y2)
 
-    box_1_area = width_1*height_1
-    box_2_area = width_2*height_2
+    inter_area = torch.clamp(inter_x2 - inter_x1, min=0) * torch.clamp(inter_y2 - inter_y1, min=0)
+    box1_area = w1 * h1
+    box2_area = w2 * h2
+    union_area = box1_area + box2_area - inter_area
 
-    box_1_left = center_x1 - (width_1 / 2)
-    box_1_right = center_x1 + (width_1 / 2)
-    box_1_bottom = center_y1 - (height_1 / 2)
-    box_1_top = center_y1 + (height_1 / 2)
+    return inter_area / (union_area + 1e-6)
 
-    box_2_left = center_x2 - (width_2 / 2)
-    box_2_right = center_x2 + (width_2 / 2)
-    box_2_bottom = center_y2 - (height_2 / 2)
-    box_2_top = center_y2 + (height_2 / 2)
 
-    intersection_width = min(box_1_right, box_2_right) - max(box_1_left, box_2_left)
-    intersection_height = min(box_1_top, box_2_top) -max(box_1_bottom, box_2_bottom)
+def calculate_yolo_loss(predictions: torch.Tensor, targets: torch.Tensor, localization_loss_weight = 5, no_obj_confidence_loss_weight = 0.5):
 
-    if intersection_width <= 0 or intersection_height <= 0:
-        return 0
+    prediction_boxes = predictions[..., :4]
+    prediction_confidence = predictions[...,4]
+    prediction_classes = predictions[...,5:]
+    
+    target_boxes = targets[..., :4]
+    target_confidence = targets[...,4]
+    target_classes = targets[...,5:]
+    
+    #iou_scores between predicted boxes and target boxes (used for loss calc)
+    iou_scores = torch.stack([calculate_iou(prediction_boxes[i], target_boxes[i]) for i in range(predictions.shape[0])])
 
-    intersection_area = intersection_width*intersection_height
-    union_area = box_1_area+box_2_area-intersection_area
+    #calculate losses
+    box_loss = localization_loss_weight * torch.mean(iou_scores)
+    obj_loss = f.binary_cross_entropy(prediction_confidence, target_confidence)
+    no_obj_loss = no_obj_confidence_loss_weight * torch.sum((prediction_confidence[target_confidence == 0]) ** 2)
+    class_loss = f.cross_entropy(prediction_classes, target_classes)
 
-    iou = intersection_area / union_area
-    return iou
+    total_loss = box_loss + obj_loss + no_obj_loss + class_loss
+    return total_loss
+
 
 def create_target(bounding_boxes, grid_size, num_classes, anchors):
     """
     creates target tensor
 
     Parameters:
-        bounding_boxes: list of bounding boxes (center_x, center_y, width, height)
+        bounding_boxes: list of ground truth bounding boxes (center_x, center_y, width, height)
         grid_size: size of grid
         num_classes: number of classes
         anchors: list of anchors (height, width)
@@ -81,9 +89,9 @@ def create_target(bounding_boxes, grid_size, num_classes, anchors):
         best_anchor_index = 0
         for anchor_index in range(num_anchors):
             anchor_width, anchor_height = anchors[anchor_index]
-
-            iou = calculate_iou((0, 0, anchor_width, anchor_height), (0, 0, width, height))
-
+            anchor_tensor = torch.tensor([0,0, anchor_width, anchor_height], dtype=torch.float32)
+            bounding_box_tensor = torch.tensor([0, 0, width, height], dtype=torch.float32)
+            iou = calculate_iou(anchor_tensor, bounding_box_tensor)
             if (iou > max_anchor_overlap):
                 max_anchor_overlap = iou
                 best_anchor_index = anchor_index
