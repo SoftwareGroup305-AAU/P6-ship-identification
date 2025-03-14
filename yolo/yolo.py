@@ -148,3 +148,26 @@ class YOLO(nn.Module):
         features = self.backbone(image)
         predictions = self.detector(features)
         # handle prediction
+
+
+class Training():
+    num_epochs = 10 #Number of passes over training data
+    model.train()
+    optimizer = torch.optim.SGD(model.parameters, lr=0.005)
+    for epoch in range(num_epochs):
+        optimizer.zero_grad()
+
+        loss_dict = model(images, targets)
+
+        losses = sum(loss for loss in loss_dict.values())
+        losses.backward()
+        optimizer.step()
+
+    print(f"Epoch [{epoch+1}/{num_epochs}] Loss: {losses.item():.4f}")
+# from PIL import Image
+# import torch
+# from torchvision import transforms
+# import urllib
+# import torch
+
+# torch.nn.Conv2d(stride=10, padding='valid', dilation=5, groups=4)We should probably look at using these params, "groups greater than 1, allows for specialization and just a tad performance"
