@@ -10,8 +10,6 @@ import torchvision
 import torchvision.transforms as transforms
 import torchvision.models.detection as detection
 
-model = detection.ssd300_vgg16(pretrained=True)#We use pretrained, and then specialize it for our purpose with more training
-
 def calculate_iou(box_1, box_2) -> float:
     """
     Calculates the Intersection over Union (IoU) between two boxes.
