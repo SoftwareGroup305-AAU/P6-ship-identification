@@ -11,6 +11,22 @@ import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 import torchvision.models.detection as detection
+import os
+from torch.utils.data import Dataset
+from torchvision.io import read_image
+import pandas as pd
+
+def load_yolo_label(filename):
+    data = pd.read_csv(filename, delim_whitespace=True, header=None)
+    data.columns = ["class", "center_x", "center_y", "width", "height"]
+    bounding_boxes = []
+    for index, row in data.iterrows():
+        bounding_boxes.append([int(row["class"]), 
+                               float(row["center_x"]), 
+                               float(row["center_y"]), 
+                               float(row["width"]), 
+                               float(row["height"])])
+    return bounding_boxes
 
 def calculate_iou(box1: torch.Tensor, box2: torch.Tensor):
     x1, y1, w1, h1 = box1
@@ -57,7 +73,7 @@ def calculate_yolo_loss(predictions: torch.Tensor, targets: torch.Tensor, locali
     return total_loss
 
 
-def create_target(bounding_boxes, grid_size, num_classes, anchors):
+def create_yolo_target(bounding_boxes, grid_size, num_classes, anchors):
     """
     creates target tensor
 
@@ -157,6 +173,51 @@ class YOLO(nn.Module):
         predictions = self.detector(features)
         # handle prediction
 
+class YOLODataset(Dataset):
+    def __init__(self, image_dir, label_dir, grid_size, num_classes, anchors, transform=None, transform_target=None):
+        super().__init__()
+        self.image_dir = image_dir
+        self.label_dir = label_dir
+        self.transform = transform
+        self.transform_target = transform_target
+        self.image_files = [f for f in os.listdir(self.image_dir)]
+        self.label_files = [f for f in os.listdir(self.label_dir)]
+        self.grid_size = grid_size
+        self.num_classes = num_classes
+        self.anchors = anchors
+
+    def __len__(self):
+        return len(self.image_files)
+
+    def __getitem__(self, index):
+        image_file = self.image_files[index]
+        image_path = os.path.join(self.image_dir, image_file)
+        image = read_image(image_path)
+
+        image_base_name = os.path.splitext(image_file)[0]
+
+        label_file_name = None
+        for label in self.label_files:
+            if label.startswith(image_base_name):
+                label_file_name = label
+                break
+        
+        if label_file_name is None:
+            #Could not find a label -> Use default zero tensor
+            target = torch.zeros(self.grid_size, self.grid_size, 
+                                len(self.anchors) if self.anchors else 3, 
+                                5 + self.num_classes)
+        else:
+            label_path = os.path.join(self.label_dir, label_file_name)
+            bounding_boxes = load_yolo_label(label_path)
+            target = create_yolo_target(bounding_boxes, self.grid_size, self.num_classes, self.anchors)
+        
+        if self.transform:
+            image = self.transform(image)
+        if self.transform_target:
+            target = self.transform_target(target)
+            
+        return image, target
 
 class Training():
     num_epochs = 10 #Number of passes over training data
