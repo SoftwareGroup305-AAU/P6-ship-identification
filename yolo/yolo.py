@@ -15,6 +15,17 @@ import os
 from torch.utils.data import Dataset
 from torchvision.io import read_image
 import pandas as pd
+import numpy as np
+
+def generate_anchors(scales, ratios):
+    anchors = []
+    for scale in scales:
+        for ratio in ratios:
+            width = scale * np.sqrt(ratio)
+            height = scale / np.sqrt(ratio)
+            anchors.append((width, height))
+    return np.array(anchors)
+
 
 def load_yolo_label(filename):
     data = pd.read_csv(filename, delim_whitespace=True, header=None)
@@ -144,44 +155,51 @@ def import_data():
 
 class YOLO(nn.Module):
     def __init__(self, num_classes, num_anchors, grid_size):
-        
+        super.__init__(YOLO, self)
         self.num_classes = num_classes
         self.num_anchors = num_anchors
         self.grid_size = grid_size
 
         #Backbone
         self.backbone = nn.Sequential(
-            nn.Conv2d(3, 32, 3),
+            nn.Conv2d(3, 32, 3, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.MaxPool2d(2),
-            nn.Conv2d(32, 64, 3),
+            nn.Conv2d(32, 64, 3, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.MaxPool2d(64),
+            nn.MaxPool2d(2),
         )
         #Detection head
         self.detector = nn.Sequential(
-            nn.Conv2d(64, 128),
+            nn.Conv2d(64, 128, padding=1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.Flatten(),
             nn.Linear(128*(grid_size // 4)**2, grid_size * grid_size * (num_anchors * 5 + num_classes))
         )
-    def forward(self, image):
-        features = self.backbone(image)
-        predictions = self.detector(features)
-        # handle prediction
+    
+    def forward(self, x):
+        features = self.backbone(x)
+        predictions_flat = self.detector(features)
+        
+        batch_size = x.shape[0]
+        predictions = predictions_flat.reshape(
+            batch_size,
+            self.grid_size,
+            self.grid_size,
+            self.num_anchors,
+            5+self.num_classes
+        )
+        return predictions
 
 class YOLODataset(Dataset):
-    def __init__(self, image_dir, label_dir, grid_size, num_classes, anchors, transform=None, transform_target=None):
-        super().__init__()
+    def __init__(self, image_dir, label_dir, grid_size, num_classes, anchors, transform=None):
         self.image_dir = image_dir
         self.label_dir = label_dir
         self.transform = transform
-        self.transform_target = transform_target
         self.image_files = [f for f in os.listdir(self.image_dir)]
-        self.label_files = [f for f in os.listdir(self.label_dir)]
         self.grid_size = grid_size
         self.num_classes = num_classes
         self.anchors = anchors
@@ -193,30 +211,21 @@ class YOLODataset(Dataset):
         image_file = self.image_files[index]
         image_path = os.path.join(self.image_dir, image_file)
         image = read_image(image_path)
-
-        image_base_name = os.path.splitext(image_file)[0]
-
-        label_file_name = None
-        for label in self.label_files:
-            if label.startswith(image_base_name):
-                label_file_name = label
-                break
         
-        if label_file_name is None:
-            #Could not find a label -> Use default zero tensor
-            target = torch.zeros(self.grid_size, self.grid_size, 
-                                len(self.anchors) if self.anchors else 3, 
-                                5 + self.num_classes)
-        else:
-            label_path = os.path.join(self.label_dir, label_file_name)
+        base_name = os.path.splitext(image_file)[0]
+        label_file = base_name + ".txt"  
+        label_path = os.path.join(self.label_dir, label_file)
+        
+        if os.path.exists(label_path):
             bounding_boxes = load_yolo_label(label_path)
             target = create_yolo_target(bounding_boxes, self.grid_size, self.num_classes, self.anchors)
+        else:
+            #Label could not be found -> Using default zero tensor
+            target = torch.zeros(self.grid_size, self.grid_size, len(self.anchors), 5 + self.num_classes)
         
         if self.transform:
             image = self.transform(image)
-        if self.transform_target:
-            target = self.transform_target(target)
-            
+        
         return image, target
 
 class Training():
