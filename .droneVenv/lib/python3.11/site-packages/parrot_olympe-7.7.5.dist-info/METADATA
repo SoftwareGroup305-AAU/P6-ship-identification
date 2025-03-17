@@ -1,0 +1,108 @@
+Metadata-Version: 2.1
+Name: parrot-olympe
+Version: 7.7.5
+Summary: Python controller library for Parrot Drones
+Description-Content-Type: text/markdown
+Keywords: uav,parrot,drones,parrot-drones
+Home-page: https://developer.parrot.com/
+Author: Nicolas Dessart
+License: BSD 3-Clause Modification
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Education
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: BSD License
+Classifier: License :: OSI Approved
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Programming Language :: C
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Scientific/Engineering :: Image Processing
+Classifier: Topic :: Scientific/Engineering
+Requires-Dist: aenum
+Requires-Dist: asn1tools
+Requires-Dist: black
+Requires-Dist: boltons
+Requires-Dist: colorlog
+Requires-Dist: dacite
+Requires-Dist: dataclasses; python_version == '3.6'
+Requires-Dist: future
+Requires-Dist: geopy
+Requires-Dist: h11
+Requires-Dist: ipython
+Requires-Dist: importlib_metadata; python_version < '3.8'
+Requires-Dist: numpy
+Requires-Dist: typing-protocol; python_version < '3.8'
+Requires-Dist: protobuf==3.19.4
+Requires-Dist: pycryptodomex
+Requires-Dist: pytz
+Requires-Dist: PyYAML
+Requires-Dist: requests
+Requires-Dist: six
+Requires-Dist: tzlocal<4.0
+Requires-Dist: wsproto
+Requires-Dist: PyOpenGL; extra == 'rendering'
+Requires-Dist: PyOpenGL-accelerate; extra == 'rendering'
+Requires-Dist: PySDL2; extra == 'rendering'
+Requires-Dist: Sphinx; extra == 'doc'
+Requires-Dist: blockdiag; extra == 'doc'
+Requires-Dist: furo; extra == 'doc'
+Requires-Dist: seqdiag; extra == 'doc'
+Requires-Dist: sphinx-copybutton; extra == 'doc'
+Requires-Dist: sphinxcontrib-seqdiag; extra == 'doc'
+Requires-Dist: pytest; extra == 'tests'
+Requires-Python: >=3.6
+Project-URL: documentation, https://developer.parrot.com/docs/olympe/
+Project-URL: repository, https://github.com/Parrot-Developers/olympe
+Provides-Extra: rendering
+Provides-Extra: doc
+Provides-Extra: tests
+
+
+# Olympe - Python controller library for Parrot Drones
+
+Olympe provides a Python controller programming interface for Parrot Drone. You can use Olympe to
+connect and control a drone from a remote Python script executed from your computer.
+Olympe is primarily intended to be used with a simulated drone (using Sphinx, the Parrot drone
+simulator) but may also be used to connect to physical drones. Like GroundSDK-iOS and
+GroundSDK-Android, Olympe is based on arsdk-ng/arsdk-xml.
+
+Olympe is part of the [Parrot Ground SDK](https://developer.parrot.com/) which allows any developer
+to create its own mobile or desktop application for ANAFI, ANAFI Thermal and ANAFI AI drones.
+
+
+## [Olympe Documentation](https://developer.parrot.com/docs/olympe/installation.html)
+
+* **[Olympe - Installation](https://developer.parrot.com/docs/olympe/installation.html)**
+* **[Olympe - User guide](https://developer.parrot.com/docs/olympe/userguide.html)**
+* **[Olympe - API Reference](https://developer.parrot.com/docs/olympe/olympeapi.html)**
+* **[Olympe - SDK Messages Reference](https://developer.parrot.com/docs/olympe/arsdkng.html)**
+
+## [Sphinx Documentation](https://developer.parrot.com/docs/sphinx/installation.html)
+
+* **[Sphinx - System requirements](https://developer.parrot.com/docs/sphinx/system_requirements.html)**
+* **[Sphinx - Installation](https://developer.parrot.com/docs/sphinx/installation.html)**
+* **[Sphinx - Quick Start guide](https://developer.parrot.com/docs/sphinx/quickstart.html)**
+
+
+## [Parrot developers forums](https://forum.developer.parrot.com/categories)
+
+* **Parrot Anafi:** https://forum.developer.parrot.com/c/anafi/
+* **Parrot Anafi Ai:** https://forum.developer.parrot.com/c/anafi-ai/
+
+## License
+
+SPDX-License-Identifier: BSD-3-Clause
+
+Olympe source code is licensed under the BSD-3-clause license, some part incorporated into Olympe
+coming from CPython/asyncio are licensed under their original PSF-2.0 license agreement.
+
+
+## Supported platform
+
+* Linux Desktop PC (Ubuntu, Debian)
+

@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	Copyright (C) 2020 Parrot SA
+
+	Redistribution and use in source and binary forms, with or without
+	modification, are permitted provided that the following conditions
+	are met:
+	* Redistributions of source code must retain the above copyright
+	notice, this list of conditions and the following disclaimer.
+	* Redistributions in binary form must reproduce the above copyright
+	notice, this list of conditions and the following disclaimer in
+	the documentation and/or other materials provided with the
+	distribution.
+	* Neither the name of Parrot nor the names
+	of its contributors may be used to endorse or promote products
+	derived from this software without specific prior written
+	permission.
+
+	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+	"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+	LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+	FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+	COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+	INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+	BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+	OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+	AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+	OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+	SUCH DAMAGE.
+-->
+<feature name="stereo_vision_sensor" id="159">
+	Messages related to the stereo vision sensor.
+
+	<enums>
+		<enum name="model">
+			Stereo vision sensor model.
+			<value name="fstcam">
+				Main sensor.
+				Only one sensor of this kind is allowed at a time on a drone.
+			</value>
+		</enum>
+
+		<enum name="feature">
+			Stereo vision sensor feature.
+			<value name="calibration">
+				Calibration feature.
+			</value>
+		</enum>
+
+		<enum name="calibration_state">
+			Calibration state.
+			<value name="required">
+				Calibration is required.
+			</value>
+			<value name="ok">
+				Calibration is ok.
+			</value>
+		</enum>
+	</enums>
+
+	<msgs>
+		<evt name="capabilities" id="1">
+			<comment
+				title="Stereo vision sensor capabilities"
+				desc="Describes stereo vision sensor supported capabilities."
+				support="091a"
+				triggered="At connection only."/>
+			<arg name="sensor_id" type="u8">
+				Id of the stereo vision sensor.
+				Sensor id is unique and persistent: the same sensor model on a same drone model has always the same id.
+				Main/Built-in sensor has id zero.
+			</arg>
+			<arg name="model" type="enum:model">
+				Sensor model.
+			</arg>
+			<arg name="supported_features" type="bitfield:u16:feature">
+				Supported features.
+			</arg>
+		</evt>
+
+		<evt name="calibration_state" id="2">
+			<comment
+				title="Calibration state"
+				comment="Current calibration state."
+				support="091a"
+				triggered="At connection and when calibration state changes."/>
+			<arg name="sensor_id" type="u8">
+				Id of the sensor.
+			</arg>
+			<arg name="state" type="enum:calibration_state">
+				Current state
+			</arg>
+		</evt>
+	</msgs>
+</feature>

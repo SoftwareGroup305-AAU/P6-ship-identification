@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	Copyright (C) 2019 Parrot SA
+
+	Redistribution and use in source and binary forms, with or without
+	modification, are permitted provided that the following conditions
+	are met:
+	* Redistributions of source code must retain the above copyright
+	notice, this list of conditions and the following disclaimer.
+	* Redistributions in binary form must reproduce the above copyright
+	notice, this list of conditions and the following disclaimer in
+	the documentation and/or other materials provided with the
+	distribution.
+	* Neither the name of Parrot nor the names
+	of its contributors may be used to endorse or promote products
+	derived from this software without specific prior written
+	permission.
+
+	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+	"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+	LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+	FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+	COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+	INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+	BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+	OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+	AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+	OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+	OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+	SUCH DAMAGE.
+-->
+<feature name="rc_transport" id="156">
+	Communication transport layer.
+
+	<enums>
+		<enum name="transport_layer">
+			Communication transport layer.
+
+			<value name="wifi">
+				Transport is over wifi 802.11
+			</value>
+			<value name="microhard">
+				Transport is over microhard
+			</value>
+		</enum>
+
+	</enums>
+
+	<msgs>
+
+		<evt name="transport" id="1">
+			<comment
+				title="Current transport layer"
+				comment="Notifies about transport layer changes."
+				triggered="At connection; on changes by [set_transport](#156-2)"/>
+			<arg name="transport" type="enum:transport_layer">
+				Current transport layer used by the skycontroller
+			</arg>
+		</evt>
+
+		<cmd name="set_transport" id="2">
+			<comment
+				title="Sets transport layer"
+				desc="Configures transport layer."
+				result="[transport](#156-1) event with the new transport layer."/>
+			<expectations>
+				<immediate>
+					#156-1(transport: this.transport)
+				</immediate>
+			</expectations>
+			<arg name="transport" type="enum:transport_layer">
+				Requested transport_layer.
+			</arg>
+		</cmd>
+
+		<evt name="capabilities" id="3">
+			<comment
+				title="Capabilities"
+				comment="Describes transports capabilities."
+				triggered="At connection only."/>
+			<arg name="transports" type="bitfield:u8:transport_layer">
+				Supported transport layers.
+			</arg>
+		</evt>
+
+	</msgs>
+</feature>
