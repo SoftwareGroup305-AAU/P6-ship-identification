@@ -1,5 +1,5 @@
 .venv
 
-data/**/images/
-data/**/labels/
+yolo/data/**/images/
+yolo/data/**/labels/
 
