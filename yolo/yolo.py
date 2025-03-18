@@ -71,7 +71,7 @@ def calculate_yolo_loss(predictions: torch.Tensor, targets: torch.Tensor, locali
     target_confidence = targets[...,4]
     target_classes = targets[...,5:]
     
-    #iou_scores between predicted boxes and target boxes (used for loss calc)
+    #iou scores between predicted boxes and target boxes (used for loss calc)
     iou_scores = torch.stack([calculate_iou(prediction_boxes[i], target_boxes[i]) for i in range(predictions.shape[0])])
 
     #calculate losses
@@ -155,35 +155,34 @@ def import_data():
 
 class YOLO(nn.Module):
     def __init__(self, num_classes, num_anchors, grid_size):
-        super.__init__(YOLO, self)
+        super().__init__()
         self.num_classes = num_classes
         self.num_anchors = num_anchors
         self.grid_size = grid_size
 
         #Backbone
         self.backbone = nn.Sequential(
-            nn.Conv2d(3, 32, 3, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(32, 64, 3, padding=1),
+            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3),
             nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.MaxPool2d(2),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
         )
         #Detection head
         self.detector = nn.Sequential(
-            nn.Conv2d(64, 128, padding=1),
-            nn.BatchNorm2d(128),
+            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(256),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(128*(grid_size // 4)**2, grid_size * grid_size * (num_anchors * 5 + num_classes))
+            nn.Linear(256 * (grid_size // 4)**2, grid_size * grid_size * (num_anchors * 5 + num_classes))
         )
     
     def forward(self, x):
         features = self.backbone(x)
         predictions_flat = self.detector(features)
-        
         batch_size = x.shape[0]
         predictions = predictions_flat.reshape(
             batch_size,

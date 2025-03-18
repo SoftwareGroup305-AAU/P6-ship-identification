@@ -39,7 +39,7 @@ for epochs in range(num_epochs):
 
         predictions = model(images)
 
-        loss = criterion(predictions, targets, num_classes=num_classes)
+        loss = criterion(predictions, targets)
 
         optimizer.zero_grad()
         loss.backward()
