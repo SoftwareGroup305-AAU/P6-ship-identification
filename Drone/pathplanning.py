@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import json
 import osmnx as ox
 
+SECTOR_SIZE = 500 #subgrid size in meters
+
 def extract_prot_area(wanted_area):
     protected_area_name = wanted_area
     protected_area = ox.geocode_to_gdf(protected_area_name)#osm lib data extractor/wrapper
