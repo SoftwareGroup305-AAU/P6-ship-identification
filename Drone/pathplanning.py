@@ -8,6 +8,7 @@ from shapely.geometry import Polygon, MultiPolygon
 import matplotlib.pyplot as plt
 import json
 import osmnx as ox
+from pyproj import CRS, Transformer
 
 SECTOR_SIZE = 500 #subgrid size in meters
 
