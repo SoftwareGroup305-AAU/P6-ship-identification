@@ -1,8 +1,6 @@
 import olympe
 import os
 import time
-import requests
-import asyncio
 from dataclasses import dataclass
 import math
 from urllib.parse import quote
@@ -51,26 +49,20 @@ def extract_prot_area(wanted_area):
     protected_area = ox.geocode_to_gdf(protected_area_name)#osm lib data extractor/wrapper
     geometry = protected_area.geometry.iloc[0]
 
+    print(geometry.bounds)
+    data = {
+        "bounds": geometry.bounds
+        #"protected": list.clear()
+    }
     if isinstance(geometry, Polygon):
-        return list(geometry.exterior.coords)
+        data.update({"protected": list(geometry.exterior.coords)})
     elif isinstance(geometry, MultiPolygon):
         largest_polygon = max(geometry.geoms, key=lambda p: p.area)
-        return list(largest_polygon.exterior.coords)
+        data.update({"protected": list(largest_polygon.exterior.coords)})
     else:
         raise TypeError("oh no, extraction failed :(")
-
-
-async def fetch_area_bb(query): 
-  headers = {'User-Agent':'DroneMap/1.0 (mail+osm@mail.dk)'}
-  response = requests.get(f'https://nominatim.openstreetmap.org/search?q=${quote(query)}&format=json', headers=headers)#quote simply transforms our search param into a URI compatible string (quote('abc def') -> 'abc%20def')
-  
-  if (response.ok):
-    data = json.loads(response.content.decode('utf-8'))
-    length = len(data)
-    return data[length-1]["boundingbox"]
-  
-  #print(response._content)
-
+    
+    return data
 
 def show_grid(protected_area, bb, area):
     polygon = Polygon(protected_area)
@@ -101,7 +93,7 @@ def show_grid(protected_area, bb, area):
     plt.show()
 
 
-# Visual Grid creation (I hate )
+# Visual Grid creation
 def create_geographic_grid(lat1, lon1, lat2, lon2, sector_size_m):
     #identify WGS boundariers
     min_lat, max_lat = min(lat1, lat2), max(lat1, lat2)
@@ -123,7 +115,7 @@ def create_geographic_grid(lat1, lon1, lat2, lon2, sector_size_m):
     utm_minx, utm_miny = transformer_to_utm.transform(min_lon, min_lat)
     utm_maxx, utm_maxy = transformer_to_utm.transform(max_lon, max_lat)
     
-    #create our sectors (grid (our 500x500meter gris of the area)) in UTM
+    #create our sectors (grid (our 500x500meter grid of the area)) in UTM
     polygons = []
     x = utm_minx
     while x < utm_maxx:
@@ -183,19 +175,19 @@ def calculate_grid(lat1, lon1, lat2, lon2):#I cooked this before i got distracte
     print(f"Sub area: {subarea} km²")
     # Grid squares of 500m x 500m
 
-async def main():
+def main():
     area = "Nibe-Gjøl Bredning Vildtreservat"
-    bb_coords = await fetch_area_bb(area)
-    protected_area = extract_prot_area(area)
-    lat1, lon1 = float(bb_coords[0]), float(bb_coords[2])
-    lat2, lon2 = float(bb_coords[1]), float(bb_coords[3])
+    data = extract_prot_area(area)
+    bb_coords = data['bounds']
+    protected_area = data['protected']
+    lat1, lon1 = float(bb_coords[1]), float(bb_coords[0])
+    lat2, lon2 = float(bb_coords[3]), float(bb_coords[2])
     grid_gdf = create_geographic_grid(lat1, lon1, lat2, lon2, sector_size_m=SECTOR_SIZE)
 
-    #For visualisation
     show_grid(protected_area, grid_gdf, area)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
 
 
 # def main():
