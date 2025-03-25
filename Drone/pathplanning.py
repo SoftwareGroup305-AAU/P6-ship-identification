@@ -17,26 +17,20 @@ def extract_prot_area(wanted_area):
     protected_area = ox.geocode_to_gdf(protected_area_name)#osm lib data extractor/wrapper
     geometry = protected_area.geometry.iloc[0]
 
+    print(geometry.bounds)
+    data = {
+        "bounds": geometry.bounds
+        #"protected": list.clear()
+    }
     if isinstance(geometry, Polygon):
-        return list(geometry.exterior.coords)
+        data.update({"protected": list(geometry.exterior.coords)})
     elif isinstance(geometry, MultiPolygon):
         largest_polygon = max(geometry.geoms, key=lambda p: p.area)
-        return list(largest_polygon.exterior.coords)
+        data.update({"protected": list(largest_polygon.exterior.coords)})
     else:
         raise TypeError("oh no, extraction failed :(")
-
-
-async def fetch_area_bb(query): 
-  headers = {'User-Agent':'DroneMap/1.0 (mail+osm@mail.dk)'}
-  response = requests.get(f'https://nominatim.openstreetmap.org/search?q=${quote(query)}&format=json', headers=headers)#quote simply transforms our search param into a URI compatible string (quote('abc def') -> 'abc%20def')
-  
-  if (response.ok):
-    data = json.loads(response.content.decode('utf-8'))
-    length = len(data)
-    return data[length-1]["boundingbox"]
-  
-  #print(response._content)
-
+    
+    return data
 
 def show_grid(protected_area, bb, area):
     polygon = Polygon(protected_area)
