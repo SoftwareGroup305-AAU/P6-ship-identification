@@ -17,10 +17,8 @@ def extract_prot_area(wanted_area):
     protected_area = ox.geocode_to_gdf(protected_area_name)#osm lib data extractor/wrapper
     geometry = protected_area.geometry.iloc[0]
 
-    print(geometry.bounds)
     data = {
         "bounds": geometry.bounds
-        #"protected": list.clear()
     }
     if isinstance(geometry, Polygon):
         data.update({"protected": list(geometry.exterior.coords)})
@@ -143,16 +141,16 @@ def calculate_grid(lat1, lon1, lat2, lon2):#I cooked this before i got distracte
     print(f"Sub area: {subarea} km²")
     # Grid squares of 500m x 500m
 
-async def main():
+def main():
     area = "Nibe-Gjøl Bredning Vildtreservat"
-    bb_coords = await fetch_area_bb(area)
-    protected_area = extract_prot_area(area)
-    lat1, lon1 = float(bb_coords[0]), float(bb_coords[2])
-    lat2, lon2 = float(bb_coords[1]), float(bb_coords[3])
+    data = extract_prot_area(area)
+    bb_coords = data['bounds']
+    protected_area = data['protected']
+    lat1, lon1 = float(bb_coords[1]), float(bb_coords[0])
+    lat2, lon2 = float(bb_coords[3]), float(bb_coords[2])
     grid_gdf = create_geographic_grid(lat1, lon1, lat2, lon2, sector_size_m=SECTOR_SIZE)
 
-    #For visualisation
     show_grid(protected_area, grid_gdf, area)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
