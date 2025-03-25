@@ -19,7 +19,7 @@ training_images_dir = "yolo/data/train/images/"
 training_labels_dir = "yolo/data/train/labels/"
 grid_size = 7
 num_classes= 11
-
+batch_size = 64
 
 anchor_config = ([0.1, 0.2, 0.4], [0.5, 1, 2])
 anchors = generate_anchors(*anchor_config)
@@ -31,7 +31,9 @@ criterion = yolo_loss
 
 training_data = YOLODataset(image_dir=training_images_dir, label_dir=training_labels_dir, grid_size=grid_size, num_classes=num_classes, anchors=anchors,  transform=train_transforms)
 
-train_loader = DataLoader(training_data, batch_size=64, shuffle=True)
+dataset_batch_len = len(training_data.image_files) / batch_size
+
+train_loader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 
 num_epochs = 20
 for epoch in range(num_epochs):
@@ -53,7 +55,7 @@ for epoch in range(num_epochs):
         running_loss += loss.item()
 
         if idx % 10== 9: 
-            print(f"[{epoch+1}, {idx+1:5d}] loss: {running_loss / 10:.3f}")
+            print(f"[{epoch+1}, {idx+1:5d}] loss: {running_loss / 10:.3f}, dataset progress: {100*(idx / dataset_batch_len)} %")
             running_loss = 0
 
 print("Finished training!")
