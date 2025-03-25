@@ -55,7 +55,7 @@ for epoch in range(num_epochs):
         running_loss += loss.item()
 
         if idx % 10== 9: 
-            print(f"[{epoch+1}, {idx+1:5d}] loss: {running_loss / 10:.3f}, dataset progress: {100*(idx / dataset_batch_len)} %")
+            print(f"[{epoch+1}, {idx+1:5d}] loss: {running_loss / 10:.3f}, dataset progress: {100*(idx / dataset_batch_len):.2f} %")
             running_loss = 0
 
 print("Finished training!")
