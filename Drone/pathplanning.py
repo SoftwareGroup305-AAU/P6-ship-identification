@@ -1,5 +1,3 @@
-import requests
-import asyncio
 from dataclasses import dataclass
 import math
 from urllib.parse import quote
