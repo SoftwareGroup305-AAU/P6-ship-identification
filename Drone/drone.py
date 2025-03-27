@@ -15,7 +15,8 @@ import osmnx as ox
 #All caps indicate const
 DRONE_IP = os.environ.get("DRONE_IP", "192.168.42.1")
 SECTOR_SIZE = 500 #subgrid size in meters
-
+# eventlisteners in the drone
+# from olympe.messages.ardrone3.PilotingState import (#    PositionChanged,#    AlertStateChanged,#    FlyingStateChanged,#    NavigateHomeStateChanged,)
 
 @dataclass
 class Location:    
@@ -188,6 +189,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+    test_takeoff()
 
 
 # def main():
