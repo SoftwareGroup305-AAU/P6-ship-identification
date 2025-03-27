@@ -30,7 +30,7 @@ def extract_prot_area(wanted_area):
 
 def show_grid(protected_area, bb, area):
     polygon = Polygon(protected_area)
-
+    
     # Combined Plot
     fig, ax = plt.subplots(figsize=(10, 10))
     
@@ -147,7 +147,7 @@ def main():
     lat1, lon1 = float(bb_coords[1]), float(bb_coords[0])
     lat2, lon2 = float(bb_coords[3]), float(bb_coords[2])
     grid_gdf = create_geographic_grid(lat1, lon1, lat2, lon2, sector_size_m=SECTOR_SIZE)
-
+    grid_gdf.geometry.intersects()
     show_grid(protected_area, grid_gdf, area)
 
 if __name__ == "__main__":
