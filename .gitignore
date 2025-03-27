@@ -1,1 +1,3 @@
 .venv
+yolo/data/**/images/
+yolo/data/**/labels/
