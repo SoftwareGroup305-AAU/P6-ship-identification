@@ -147,7 +147,19 @@ def main():
     lat1, lon1 = float(bb_coords[1]), float(bb_coords[0])
     lat2, lon2 = float(bb_coords[3]), float(bb_coords[2])
     grid_gdf = create_geographic_grid(lat1, lon1, lat2, lon2, sector_size_m=SECTOR_SIZE)
-    grid_gdf.geometry.intersects()
+    #grid_gdf.geometry.intersects()
+
+    grid_gdf['intersects'] = grid_gdf.geometry.intersects(Polygon(protected_area))
+    # Count the number of True (intersecting) and False (non-intersecting) values
+    intersecting_cells = grid_gdf['intersects'].sum()
+    non_intersecting_cells = len(grid_gdf) - intersecting_cells
+    all_cells = len(grid_gdf)
+
+    print(f"Intersecting cells: {intersecting_cells}")
+    print(f"Non-intersecting cells: {non_intersecting_cells}")
+    print(f"all cells: {all_cells}")
+
+    
     show_grid(protected_area, grid_gdf, area)
 
 if __name__ == "__main__":
