@@ -47,9 +47,9 @@ def ray_bottom_left(fov_h, fov_v):
 
 def get_ray_intersections(rays, origin):
     intersections = []
+    o_x, o_y, o_z = origin
     for ray in rays:
         # Extract the origin (x, y, z) and direction (dx, dy, dz) components
-        o_x, o_y, o_z = origin
         d_x, d_y, d_z = ray
         
         # Skip if ray does not intersect the the ground (d_z >= 0)
@@ -71,7 +71,7 @@ def get_ray_intersections(rays, origin):
 
 def get_bounding_area(x, y, fov_h, fov_v, altitude, roll, pitch, yaw):
     rotation = rotation_matrix(yaw, pitch, roll)
-
+    
     ray_1 = rotation @ ray_top_right(fov_h, fov_v) 
     ray_2 = rotation @ ray_top_left(fov_h, fov_v) 
     ray_3 = rotation @ ray_bottom_right(fov_h, fov_v)
@@ -87,7 +87,7 @@ def test_get_bounding_area():
     altitude = 50  # Drone is 150 meters above the ground
     fov_h = math.radians(90)  # 90-degree horizontal FOV
     fov_v = math.radians(60)  # 60-degree vertical FOV
-    roll, pitch, yaw = 0, math.radians(90), 0 # 30° pitch, 15° yaw
+    roll, pitch, yaw = 0, math.radians(10), 0 # 30° pitch, 15° yaw
 
     bounding_area = get_bounding_area(x, y, fov_h, fov_v, altitude, roll, pitch, yaw)
 
