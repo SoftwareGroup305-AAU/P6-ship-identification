@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import json
 import osmnx as ox
 from pyproj import CRS, Transformer
+import threading
 
 SECTOR_SIZE = 500 #subgrid size in meters
 
@@ -138,8 +139,9 @@ def calculate_grid(lat1, lon1, lat2, lon2):#I cooked this before i got distracte
     subarea = area_km2 / 4
     print(f"Sub area: {subarea} km²")
     # Grid squares of 500m x 500m
-
+renderThread = None
 def main():
+    global renderThread
     area = "Nibe-Gjøl Bredning Vildtreservat"
     data = extract_prot_area(area)
     bb_coords = data['bounds']
@@ -159,8 +161,12 @@ def main():
     print(f"Non-intersecting cells: {non_intersecting_cells}")
     print(f"all cells: {all_cells}")
 
-    
+    renderThread = threading.Thread(target=show_grid, args=(protected_area, grid_gdf, area))
+    renderThread.start()
+
+    #t2 = threading.Thread(target=print_cube, args=(10,))
     show_grid(protected_area, grid_gdf, area)
 
 if __name__ == "__main__":
+    
     main()
