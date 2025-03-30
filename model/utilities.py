@@ -4,10 +4,10 @@ import torch.nn.functional as F
     
 class GIoULoss(nn.Module):
     def forward(self, prediction, target):
-        x1 = torch.max(prediction[:, 0], target[:, 0])
-        y1 = torch.max(prediction[:, 1], target[:, 1])
-        x2 = torch.min(prediction[:, 2], target[:, 2])
-        y2 = torch.min(prediction[:, 3], target[:, 3])
+        x1 = torch.min(prediction[:, 0], target[:, 0])
+        y1 = torch.min(prediction[:, 1], target[:, 1])
+        x2 = torch.max(prediction[:, 2], target[:, 2])
+        y2 = torch.max(prediction[:, 3], target[:, 3])
 
         intersection_width = (x2 - x1).clamp(0)
         intersection_height = (y2 - y1).clamp(0)
@@ -43,7 +43,7 @@ class CompositeLoss(nn.Module):
         # no clue if weights should be adjusted and what benefit this would provide
         class_loss_weight = 1
         objectness_loss_weight = 1
-        localization_loss_weight = 5
+        localization_loss_weight = 1
 
         batch_size, grid_size, grid_size, num_classes = class_predictions.shape
 
@@ -66,10 +66,25 @@ class CompositeLoss(nn.Module):
 
             slelected_prediction = class_predictions[index, grid_y, grid_x]
 
-            class_loss += self.ce_loss(slelected_prediction, class_targets)
-            objectness_loss += self.mse_loss(objectness_predictions[index, grid_y, grid_x], objectness_targets)
-            localization_loss = self.giou_loss(localization_predictions[index, grid_y, grid_x], localization_targets)
+            localization_box = localization_predictions[index, grid_y, grid_x]
 
+            center_x, center_y, width, height = localization_box[..., 0], localization_box[..., 1], localization_box[..., 2], localization_box[..., 3]
+            x1 = center_x - width / 2
+            y1 = center_y - height / 2
+            x2 = center_x + width / 2
+            y2 = center_y + height / 2
+            localization_box = torch.stack([x1, y1, x2, y2], dim=-1)
+
+            center_x, center_y, width, height = localization_targets[..., 0], localization_targets[..., 1], localization_targets[..., 2], localization_targets[..., 3]
+            x1 = center_x - width / 2
+            y1 = center_y - height / 2
+            x2 = center_x + width / 2
+            y2 = center_y + height / 2
+            localization_targets = torch.stack([x1, y1, x2, y2], dim=-1)
+
+            class_loss += self.ce_loss(slelected_prediction, class_targets)
+            objectness_loss += self.mse_loss(objectness_predictions[index, grid_y, grid_x], objectness_targets.squeeze(-1))
+            localization_loss = self.giou_loss(localization_box, localization_targets)
 
         num_targets = sum(len(target) for target in targets if len(target) > 0)
         if num_targets > 0:

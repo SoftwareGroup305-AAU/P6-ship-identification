@@ -24,7 +24,6 @@ def collate_fn(batch):
     images = torch.stack(images)
     return images, list(targets)
 
-
 training_data = YOLODataset(training_images_dir, training_labels_dir, train_transforms)
 dataloader = DataLoader(training_data, batch_size=16, shuffle=True, collate_fn=collate_fn) # trying smaller batch size, should be better and less resource intensive according to some paper
 
