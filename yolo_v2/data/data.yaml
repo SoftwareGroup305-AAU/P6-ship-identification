@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 11
+names: ['Boat', 'Cargo-Ship', 'Carrier-Ship', 'Container-Ship', 'Cruise-Ship', 'Fish-Boat', 'Sail-Boat', 'Submarine', 'Tanker-Ship', 'Tugboat', 'War-Ship']
+
+roboflow:
+  workspace: mydata-ma6tn
+  project: ship-detecttion
+  version: 5
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/mydata-ma6tn/ship-detecttion/dataset/5

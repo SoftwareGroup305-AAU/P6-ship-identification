@@ -59,8 +59,7 @@ def train(model, dataloader, optimizer, criterion, device, epochs):
             targets = [target.to(device) for target in targets]
             optimizer.zero_grad()
             class_predictions, objectness_predictions, localization_predictions = model(images)
-            
-            loss = criterion(class_predictions, objectness_predictions, localization_predictions, targets)
+            loss = criterion(class_predictions, objectness_predictions, localization_predictions, targets, device)
             loss.backward()
             optimizer.step()
             epoch_loss += loss.item()

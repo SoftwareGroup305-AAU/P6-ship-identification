@@ -39,7 +39,7 @@ class CompositeLoss(nn.Module):
         self.mse_loss = nn.MSELoss()
         self.ce_loss = nn.CrossEntropyLoss()
 
-    def forward(self, class_predictions, objectness_predictions, localization_predictions, targets):
+    def forward(self, class_predictions, objectness_predictions, localization_predictions, targets, device):
         # no clue if weights should be adjusted and what benefit this would provide
         class_loss_weight = 1
         objectness_loss_weight = 1
