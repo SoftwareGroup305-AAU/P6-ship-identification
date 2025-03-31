@@ -51,6 +51,7 @@ class CompositeLoss(nn.Module):
         objectness_loss = 0
         localization_loss = 0
 
+
         for index in range(batch_size):
             target = targets[index]
 
@@ -58,7 +59,7 @@ class CompositeLoss(nn.Module):
                 continue
 
             class_targets = target[:, 0].long()
-            objectness_targets = torch.ones(len(target), 1)
+            objectness_targets = torch.ones(len(target), device=objectness_predictions.device)
             localization_targets = target[:, 1:]
 
             grid_x = (target[:, 1] * grid_size).long()
@@ -67,6 +68,7 @@ class CompositeLoss(nn.Module):
             slelected_prediction = class_predictions[index, grid_y, grid_x]
 
             class_loss += self.ce_loss(slelected_prediction, class_targets)
+            obj_pred = objectness_predictions[index, grid_y, grid_x]
             objectness_loss += self.mse_loss(objectness_predictions[index, grid_y, grid_x], objectness_targets)
             localization_loss = self.giou_loss(localization_predictions[index, grid_y, grid_x], localization_targets)
 
