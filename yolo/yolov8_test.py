@@ -29,7 +29,7 @@ for box in result.boxes:
     
     # Draw rectangle and label
     cv2.rectangle(image, (x1, y1), (x2, y2), (255, 0, 0), 3)  # Blue bounding box
-    cv2.putText(image, f"Class {cls} ({confidence:.2f})", (x1, y1 - 10),
+    cv2.putText(image, f"Class '{result.names[cls]}' ({confidence:.2f})", (x1, y1 - 10),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
 # Display the image with bounding boxes
