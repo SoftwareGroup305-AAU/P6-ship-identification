@@ -39,7 +39,7 @@ class CompositeLoss(nn.Module):
         self.mse_loss = nn.MSELoss()
         self.ce_loss = nn.CrossEntropyLoss()
 
-    def forward(self, class_predictions, objectness_predictions, localization_predictions, targets):
+    def forward(self, class_predictions, objectness_predictions, localization_predictions, targets, device):
         # no clue if weights should be adjusted and what benefit this would provide
         class_loss_weight = 1
         objectness_loss_weight = 1
@@ -58,7 +58,7 @@ class CompositeLoss(nn.Module):
                 continue
 
             class_targets = target[:, 0].long()
-            objectness_targets = torch.ones(len(target), 1)
+            objectness_targets = torch.ones(len(target), 1, device=device)
             localization_targets = target[:, 1:]
 
             grid_x = (target[:, 1] * grid_size).long()

@@ -1,16 +1,7 @@
-from typing import Callable
-from PIL import Image
 import torch
-from torchvision import transforms
-import urllib
 import torch
 import torch.nn as nn
-from torch.utils.data import dataloader
 import torch.nn.functional as f
-import torch.optim as optim
-import torchvision
-import torchvision.transforms as transforms
-import torchvision.models.detection as detection
 import os
 from torch.utils.data import Dataset
 from torchvision.io import read_image
@@ -129,57 +120,6 @@ def calculate_yolo_loss_v3(predictions: torch.Tensor, targets: torch.Tensor,
     # Average loss over batch
     return total_loss / batch_size
 
-def calculate_yolo_loss(predictions: torch.Tensor, targets: torch.Tensor, localization_loss_weight = 5, no_obj_confidence_loss_weight = 0.5):
-
-    prediction_boxes = predictions[..., :4]
-    prediction_confidence = predictions[...,4]
-    prediction_classes = predictions[...,5:]
-    
-    target_boxes = targets[..., :4]
-    target_confidence = targets[...,4]
-    target_classes = targets[...,5:]
-    
-    #iou scores between predicted boxes and target boxes (used for loss calc)
-    # Does NOT work because it does not get a single box, but multiple. 
-    iou_scores = torch.stack([calculate_iou(prediction_boxes[i], target_boxes[i]) for i in range(predictions.shape[0])])
-    
-    #calculate losses
-    box_loss = localization_loss_weight * torch.sum((prediction_boxes - target_boxes) ** 2)
-    obj_loss = f.binary_cross_entropy(prediction_confidence, target_confidence)
-    no_obj_loss = no_obj_confidence_loss_weight * torch.sum((prediction_confidence[target_confidence == 0]) ** 2)
-    class_loss = f.cross_entropy(prediction_classes, target_classes)
-
-    total_loss = box_loss + obj_loss + no_obj_loss + class_loss
-    return total_loss
-
-def calculate_yolo_loss_v2(predictions, targets, lambda_coord=5, lambda_noobj=0.5):
-    """
-    Computes YOLO loss.
-    - predictions: Predicted tensor.
-    - targets: Ground truth tensor.
-    """
-    # Unpack predictions and targets
-    pred_boxes = predictions[..., :4]
-    pred_conf = predictions[..., 4]
-    pred_classes = predictions[..., 5:]
-    target_boxes = targets[..., :4]
-    target_conf = targets[..., 4]
-    target_classes = targets[..., 5:]
-    
-    # Localization Loss
-    box_loss = lambda_coord * torch.sum((pred_boxes - target_boxes) ** 2)
-
-    # Confidence Loss
-    obj_loss = torch.sum((pred_conf - target_conf) ** 2)
-    noobj_loss = lambda_noobj * torch.sum((pred_conf[target_conf == 0]) ** 2)
-
-    # Classification Loss
-    class_loss = torch.sum((pred_classes - target_classes) ** 2)
-
-    # Total Loss
-    total_loss = box_loss + obj_loss + noobj_loss + class_loss
-    return total_loss
-
 def create_yolo_target(bounding_boxes, grid_size, num_classes, anchors):
     """
     creates target tensor
@@ -234,21 +174,6 @@ def create_yolo_target(bounding_boxes, grid_size, num_classes, anchors):
         # One-hot encode the class label
         target[grid_y, grid_x, best_anchor_index, 5 + int(class_label)] = 1
     return target
-
-# def import_data():
-#     transform = transforms.Compose([
-#         transforms.Resize(300, 300),
-#         transforms.ToTensor(),
-#         transforms.Normalize((0.5, 0.5, 0.5), 
-#                             (0.5, 0.5, 0.5))
-#     ])
-
-#     training_set = 0 # training data location
-#     training_data_loader = dataloader(training_set, batch_size=32, shuffle=True)
-    
-#     test_set = 0 # test data location
-#     test_data_loader = dataloader(test_set, batch_size=32, shuffle=False)
-
 
 class ConvBlock(nn.Module):
     """A block of Conv2D -> BatchNorm -> ReLU."""
@@ -306,47 +231,6 @@ class YOLO(nn.Module):
         predictions = self.head(features)
         return predictions
 
-
-# class YOLO(nn.Module):
-#     def __init__(self, num_classes, num_anchors, grid_size):
-#         super().__init__()
-#         self.num_classes = num_classes
-#         self.num_anchors = num_anchors
-#         self.grid_size = grid_size
-
-#         #Backbone
-#         self.backbone = nn.Sequential(
-#             nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3),
-#             nn.BatchNorm2d(64),
-#             nn.ReLU(),
-#             nn.MaxPool2d(kernel_size=2, stride=2),
-#             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
-#             nn.BatchNorm2d(128),
-#             nn.ReLU(),
-#             nn.MaxPool2d(kernel_size=2, stride=2),
-#         )
-#         #Detection head
-#         self.detector = nn.Sequential(
-#             nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
-#             nn.BatchNorm2d(256),
-#             nn.ReLU(),
-#             nn.Flatten(),
-#             nn.Linear(256 * (grid_size // 4)**2, grid_size * grid_size * (num_anchors * 5 + num_classes))
-#         )
-    
-#     def forward(self, x):
-#         features = self.backbone(x)
-#         predictions_flat = self.detector(features)
-#         batch_size = x.shape[0]
-#         predictions = predictions_flat.reshape(
-#             batch_size,
-#             self.grid_size,
-#             self.grid_size,
-#             self.num_anchors,
-#             5+self.num_classes
-#         )
-#         return predictions
-
 class YOLODataset(Dataset):
     def __init__(self, image_dir, label_dir, grid_size, num_classes, anchors, transform=None):
         self.image_dir = image_dir
@@ -380,25 +264,3 @@ class YOLODataset(Dataset):
             image = self.transform(image)
         
         return image, target
-
-# class Training():
-#     num_epochs = 10 #Number of passes over training data
-#     model.train()
-#     optimizer = torch.optim.SGD(model.parameters, lr=0.005)
-#     for epoch in range(num_epochs):
-#         optimizer.zero_grad()
-
-#         loss_dict = model(images, targets)
-
-#         losses = sum(loss for loss in loss_dict.values())
-#         losses.backward()
-#         optimizer.step()
-
-#     print(f"Epoch [{epoch+1}/{num_epochs}] Loss: {losses.item():.4f}")
-# # from PIL import Image
-# # import torch
-# # from torchvision import transforms
-# # import urllib
-# # import torch
-
-# torch.nn.Conv2d(stride=10, padding='valid', dilation=5, groups=4)We should probably look at using these params, "groups greater than 1, allows for specialization and just a tad performance"
