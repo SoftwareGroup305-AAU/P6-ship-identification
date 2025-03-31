@@ -8,6 +8,7 @@ from dataset import YOLODataset
 from core import YOLO
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"device: {device}")
 
 training_images_dir = "../data/train/images/"
 training_labels_dir = "../data/train/labels/"

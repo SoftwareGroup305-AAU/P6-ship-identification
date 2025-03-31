@@ -84,7 +84,7 @@ class CompositeLoss(nn.Module):
             localization_targets = torch.stack([x1, y1, x2, y2], dim=-1)
 
             class_loss += self.ce_loss(slelected_prediction, class_targets)
-            objectness_loss += self.mse_loss(objectness_predictions[index, grid_y, grid_x], objectness_targets.squeeze(-1))
+            objectness_loss += self.mse_loss(objectness_predictions[index, grid_y, grid_x], objectness_targets)
             localization_loss = self.giou_loss(localization_box, localization_targets)
 
         num_targets = sum(len(target) for target in targets if len(target) > 0)
