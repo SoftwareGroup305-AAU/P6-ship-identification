@@ -34,19 +34,19 @@ class GIoULoss(nn.Module):
     
 class CompositeLoss(nn.Module):
     def __init__(self, num_classes):
-        super().__init__(num_classes)
+        super().__init__()
         self.giou_loss = GIoULoss()
         self.mse_loss = nn.MSELoss()
         if (num_classes > 2):
             self.ce_loss = nn.CrossEntropyLoss()
-        else: self.ce_loss = nn.BCELoss()
+        else: self.ce_loss = nn.BCEWithLogitsLoss()
 
 
     def forward(self, class_predictions, objectness_predictions, localization_predictions, targets, device):
         # no clue if weights should be adjusted and what benefit this would provide
         class_loss_weight = 1
-        objectness_loss_weight = 1
-        localization_loss_weight = 1
+        objectness_loss_weight = 5
+        localization_loss_weight = 2
 
         batch_size, grid_size, grid_size, num_classes = class_predictions.shape
 
@@ -63,10 +63,13 @@ class CompositeLoss(nn.Module):
 
             class_targets = target[:, 0].long()
             objectness_targets = torch.ones(len(target), device=objectness_predictions.device)
+            full_objectness_target = torch.zeros((grid_size, grid_size), device=objectness_predictions.device)
             localization_targets = target[:, 1:]
 
             grid_x = (target[:, 1] * grid_size).long()
             grid_y = (target[:, 2] * grid_size).long()
+
+            full_objectness_target[grid_y, grid_x] = 1
 
             selected_prediction = class_predictions[index, grid_y, grid_x]
 
@@ -87,8 +90,8 @@ class CompositeLoss(nn.Module):
             localization_targets = torch.stack([x1, y1, x2, y2], dim=-1)
 
             class_loss += self.ce_loss(selected_prediction, class_targets)
-            objectness_loss += self.mse_loss(objectness_predictions[index, grid_y, grid_x], objectness_targets)
-            localization_loss = self.giou_loss(localization_box, localization_targets)
+            objectness_loss += self.mse_loss(objectness_predictions[index], full_objectness_target)
+            localization_loss += self.giou_loss(localization_box, localization_targets)
 
         num_targets = sum(len(target) for target in targets if len(target) > 0)
         if num_targets > 0:

@@ -39,7 +39,6 @@ gpu_count = torch.cuda.device_count()
 #↑↑↑ cant get multi-gpu to work for now↑↑↑
 
 print(f"Using { 1 if gpu_count >= 1 else 0} GPUs")
-
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 criterion = CompositeLoss(num_classes)
 
@@ -47,6 +46,7 @@ epochs = 50
 
 def train(model, dataloader, optimizer, criterion, device, epochs):
     model.train()
+    best_loss = float("inf")
     inc = 0
     run_loss = 0
     avg_loss = 0
@@ -72,8 +72,13 @@ def train(model, dataloader, optimizer, criterion, device, epochs):
             # print(f"Run {inc+1}/150, Run Loss: {run_loss}")
             inc += 1
             avg_loss += run_loss
-        print(f"Average Loss for Epoch: {epoch_loss / inc}")
+        epoch_loss_avg = epoch_loss / inc
+        print(f"Average Loss for Epoch: {epoch_loss_avg}")
         inc = 0
+        torch.save(model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict(), "yolo_custom_last.pth")
+        if (epoch_loss_avg < best_loss):
+            torch.save(model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict(), "yolo_custom_best.pth")
+            best_loss = epoch_loss_avg
 
 train(model, dataloader, optimizer, criterion, device, epochs)
 

@@ -23,17 +23,13 @@ model = YOLO(num_classes=11)
 
 model.load_state_dict(torch.load(model_file, weights_only=True, map_location=torch.device("cpu")))
 
+model.eval()
+
 class_pred, obj_pred, localization_pred = model(img)
 
 for grid_y in range(localization_pred[0].shape[0]):
     for grid_x in range(localization_pred[0][0].shape[0]):
-        has_fucked_value = False
-        for x in range(4):
-            if (localization_pred[0][grid_y][grid_x][x] < 0):
-                has_fucked_value = True
-            
-        if (not has_fucked_value):
-            print(localization_pred[0][grid_y][grid_x])
+            print(localization_pred[0][grid_x][grid_y])
 
             
 
