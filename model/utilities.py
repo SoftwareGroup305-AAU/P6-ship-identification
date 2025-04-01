@@ -33,11 +33,14 @@ class GIoULoss(nn.Module):
         return 1 - giou.mean()
     
 class CompositeLoss(nn.Module):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, num_classes):
+        super().__init__(num_classes)
         self.giou_loss = GIoULoss()
         self.mse_loss = nn.MSELoss()
-        self.ce_loss = nn.CrossEntropyLoss()
+        if (num_classes > 2):
+            self.ce_loss = nn.CrossEntropyLoss()
+        else: self.ce_loss = nn.BCELoss()
+
 
     def forward(self, class_predictions, objectness_predictions, localization_predictions, targets, device):
         # no clue if weights should be adjusted and what benefit this would provide

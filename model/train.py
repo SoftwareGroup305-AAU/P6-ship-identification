@@ -41,7 +41,7 @@ gpu_count = torch.cuda.device_count()
 print(f"Using { 1 if gpu_count >= 1 else 0} GPUs")
 
 optimizer = optim.Adam(model.parameters(), lr=0.001)
-criterion = CompositeLoss()
+criterion = CompositeLoss(num_classes)
 
 epochs = 50
 
