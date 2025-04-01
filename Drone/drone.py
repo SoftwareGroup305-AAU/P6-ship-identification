@@ -60,4 +60,6 @@ def test_takeoff():
 #         cv2.destroyAllWindows()
 #         drone.unsubscribe(listener)
 #         drone.disconnect()
+
+# if __name__ == "__main__":
 #     main()
