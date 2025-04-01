@@ -35,9 +35,6 @@ def test_takeoff():
     assert drone(Landing()).wait().success()
     drone.disconnect()
 
-if __name__ == "__main__":
-    pass
-
 
 # def main():
 #     drone = olympe.Drone("192.168.42.1")
@@ -63,3 +60,4 @@ if __name__ == "__main__":
 #         cv2.destroyAllWindows()
 #         drone.unsubscribe(listener)
 #         drone.disconnect()
+#     main()
