@@ -10,8 +10,8 @@ from core import YOLO
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"device: {device}")
 
-training_images_dir = "../data/train/images/"
-training_labels_dir = "../data/train/labels/"
+training_images_dir = "yolo/data/train/images/"
+training_labels_dir = "yolo/data/train/labels/"
 
 train_transforms = transforms.Compose([
     transforms.ToPILImage(),
@@ -72,8 +72,7 @@ def train(model, dataloader, optimizer, criterion, device, epochs):
             # print(f"Run {inc+1}/150, Run Loss: {run_loss}")
             inc += 1
             avg_loss += run_loss
-        print(f"Average Loss for Epoch: {avg_loss / inc}")
-        avg_loss = 0 
+        print(f"Average Loss for Epoch: {epoch_loss / inc}")
         inc = 0
 
 train(model, dataloader, optimizer, criterion, device, epochs)

@@ -40,9 +40,9 @@ class Head(nn.Module):
 
     def forward(self, x):
         x = F.relu(self.conv(x))
-        classification_output = self.classification(x).permute(0, 2, 3, 1).contiguous()
-        objectness_output = self.objectness(x).squeeze(1)
-        localization_output = self.localization(x).permute(0, 2, 3, 1).contiguous()
+        classification_output = F.relu(self.classification(x)).permute(0, 2, 3, 1).contiguous()
+        objectness_output = F.relu(self.objectness(x)).squeeze(1)
+        localization_output = F.relu(self.localization(x)).permute(0, 2, 3, 1).contiguous()
         return classification_output, objectness_output, localization_output
 
 class YOLO(nn.Module):
