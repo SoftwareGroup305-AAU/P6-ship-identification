@@ -34,7 +34,7 @@ class GIoULoss(nn.Module):
     
 class CompositeLoss(nn.Module):
     def __init__(self, num_classes):
-        super().__init__(num_classes)
+        super().__init__()
         self.giou_loss = GIoULoss()
         self.mse_loss = nn.MSELoss()
         if (num_classes > 2):
