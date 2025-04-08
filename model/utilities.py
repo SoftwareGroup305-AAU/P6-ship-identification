@@ -40,7 +40,7 @@ class CompositeLoss(nn.Module):
         if (num_classes > 2):
             self.ce_loss = nn.CrossEntropyLoss()
         else: self.ce_loss = nn.BCEWithLogitsLoss()
-
+        
 
     def forward(self, class_predictions, objectness_predictions, localization_predictions, targets, device):
         # no clue if weights should be adjusted and what benefit this would provide
