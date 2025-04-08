@@ -40,7 +40,7 @@ class Head(nn.Module):
 
     def forward(self, x):
         x = F.relu(self.conv(x))
-        classification_output = F.sigmoid(self.classification(x)).permute(0, 2, 3, 1).contiguous()
+        classification_output = (self.classification(x)).permute(0, 2, 3, 1).contiguous() # removed activation function, dont know if good or not
         objectness_output = F.sigmoid(self.objectness(x)).squeeze(1)
         localization_output = F.sigmoid(self.localization(x)).permute(0, 2, 3, 1).contiguous()
         return classification_output, objectness_output, localization_output
