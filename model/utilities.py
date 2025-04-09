@@ -45,8 +45,8 @@ class CompositeLoss(nn.Module):
     def forward(self, class_predictions, objectness_predictions, localization_predictions, targets, device):
         # no clue if weights should be adjusted and what benefit this would provide
         class_loss_weight = 1
-        objectness_loss_weight = 5
-        localization_loss_weight = 2
+        objectness_loss_weight = 1
+        localization_loss_weight = 1
 
         batch_size, grid_size, grid_size, num_classes = class_predictions.shape
 
@@ -62,7 +62,7 @@ class CompositeLoss(nn.Module):
                 continue
 
             class_targets = target[:, 0].long()
-            objectness_targets = torch.ones(len(target), device=objectness_predictions.device)
+            # objectness_targets = torch.ones(len(target), device=objectness_predictions.device)
             full_objectness_target = torch.zeros((grid_size, grid_size), device=objectness_predictions.device)
             localization_targets = target[:, 1:]
 
@@ -90,6 +90,7 @@ class CompositeLoss(nn.Module):
             localization_targets = torch.stack([x1, y1, x2, y2], dim=-1)
 
             class_loss += self.ce_loss(selected_prediction, class_targets)
+            # objectness_loss += self.mse_loss(objectness_predictions[index, grid_y, grid_x], objectness_targets)
             objectness_loss += self.mse_loss(objectness_predictions[index], full_objectness_target)
             localization_loss += self.giou_loss(localization_box, localization_targets)
 
