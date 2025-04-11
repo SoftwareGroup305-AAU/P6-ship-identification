@@ -13,7 +13,8 @@ class YOLOLoss(nn.Module):
            B, _, H, W = pred["bbox"].shape
            bbox_preds = pred["bbox"].view(B, 4, self.reg_max, H, W).permute(0, 3, 4, 1, 2)
            cls_pred = pred["cls"].permute(0, 2, 3, 1)
-           self.build_targets(raw_targets, H, W, self.device)
+           
+           targets = self.build_targets(raw_targets, H, W, self.device)
 
     def build_targets(self, raw_targets, H, W, device):
         B = len(raw_targets)
