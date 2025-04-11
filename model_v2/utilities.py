@@ -9,8 +9,7 @@ class YOLOLoss(nn.Module):
         self.device = device
     
     def forward(self, raw_preds, raw_targets):
-       
-       for key ,pred in raw_preds.items():
+       for key, pred in raw_preds.items():
            B, _, H, W = pred["bbox"].shape
            bbox_preds = pred["bbox"].view(B, 4, self.reg_max, H, W).permute(0, 3, 4, 1, 2)
            cls_pred = pred["cls"].permute(0, 2, 3, 1)
