@@ -88,7 +88,7 @@ class Detect(nn.Module):
         # Bbox branch (coordinates + objectness ???)
         self.bbox = nn.Conv2d(in_channels, 4 * reg_max, kernel_size=1, stride=1, padding=0)  
         # Class branch
-        self.cls = nn.Conv2d(in_channels, num_classes, kernel_size=1, stride=1, padding=1)  
+        self.cls = nn.Conv2d(in_channels, num_classes, kernel_size=1, stride=1, padding=0)  
 
     def forward(self, x):
         x = self.stem(x)

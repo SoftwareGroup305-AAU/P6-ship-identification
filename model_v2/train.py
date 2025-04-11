@@ -6,6 +6,7 @@ from torchvision import transforms
 
 from dataset import YOLODataset
 from core import YOLO
+from utilities import YOLOLoss
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"device: {device}")
@@ -40,7 +41,7 @@ gpu_count = torch.cuda.device_count()
 
 print(f"Using { 1 if gpu_count >= 1 else 0} GPUs")
 optimizer = optim.Adam(model.parameters(), lr=0.001)
-criterion = None
+criterion = YOLOLoss(num_classes)
 
 epochs = 50
 
@@ -60,7 +61,7 @@ def train(model, dataloader, optimizer, criterion, device, epochs):
             targets = [target.to(device) for target in targets]
             optimizer.zero_grad()
             output = model(images)
-            # loss = criterion(class_predictions, objectness_predictions, localization_predictions, targets, device)
+            loss = criterion(output, None)
             # loss.backward()
             # optimizer.step()
             # epoch_loss += loss.item()
