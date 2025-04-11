@@ -1,31 +1,6 @@
 import torch
 import torch.nn as nn
 
-
-class ConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride, padding):
-        super().__init__() 
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
-        self.bn = nn.BatchNorm2d(out_channels)
-        self.silu = nn.SiLU()
-
-    def forward(self, x):
-        return self.silu(self.bn(self.conv(x)))
-    
-
-class Bottleneck(nn.Module):
-    def __init__(self, num_features, shortcut):
-        super().__init__()
-        self.conv1 = ConvBlock(num_features, num_features, kernel_size=3, stride=1, padding=1)
-        self.conv2 = ConvBlock(num_features, num_features, kernel_size=3, stride=1, padding=1)
-        self.use_shortcut = shortcut
-
-    def forward(self, x):
-        y = self.conv2(self.conv1(x))
-        if self.use_shortcut:
-            return x + y
-        return y
-
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding):
         super().__init__() 
@@ -93,14 +68,15 @@ class SPPF(nn.Module):
         out_channels = out_channels or in_channels
         self.conv1 = ConvBlock(in_channels, in_channels, kernel_size=1, stride=1, padding=0)
         self.maxpool = nn.MaxPool2d(kernel_size=5, stride=1, padding=2)
-        self.conv2 = ConvBlock(2 * in_channels, out_channels, kernel_size=1, stride=1, padding=0)
+        self.conv2 = ConvBlock(4 * in_channels, out_channels, kernel_size=1, stride=1, padding=0)
 
     def forward(self, x):
         x = self.conv1(x)
         y1 = self.maxpool(x)
         y2 = self.maxpool(y1)
         y3 = self.maxpool(y2)
-        return self.conv2(torch.cat([x, y3], dim=1)) 
+        cat = torch.cat([x, y1, y2, y3], dim=1)
+        return self.conv2(cat) 
 
 class Detect(nn.Module):
     def __init__(self, num_classes, in_channels, reg_max=16):
@@ -110,9 +86,9 @@ class Detect(nn.Module):
             ConvBlock(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
         )
         # Bbox branch (coordinates + objectness ???)
-        self.bbox = nn.Conv2d(in_channels, 4 * reg_max, kernel_size=1)  
+        self.bbox = nn.Conv2d(in_channels, 4 * reg_max, kernel_size=1, stride=1, padding=0)  
         # Class branch
-        self.cls = nn.Conv2d(in_channels, num_classes, kernel_size=1)  
+        self.cls = nn.Conv2d(in_channels, num_classes, kernel_size=1, stride=1, padding=1)  
 
     def forward(self, x):
         x = self.stem(x)
@@ -246,6 +222,5 @@ class YOLO(nn.Module):
         self.backbone = Backbone(depth_multiple, width_multiple, max_channels)
         self.neck = Neck(channels, depth_multiple)
         self.head = Head(channels, num_classes)
-
     def forward(self, x):
         return self.head(self.neck(self.backbone(x)))
