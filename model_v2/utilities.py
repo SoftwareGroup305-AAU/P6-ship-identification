@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as TF
 
 class YOLOLoss(nn.Module):
     def __init__(self, num_classes, reg_max=16, device=None):
@@ -36,16 +37,14 @@ class YOLOLoss(nn.Module):
             "bbox": bbox_targets,
             "cls": cls_targets
         }
-
-
-
-
-
-
-
-
-
-
+        
+    def distributed_focal_loss(pred_dist, target):
+        """Return sum of left and right DFL losses."""
+        tl = target.long
+        tr = tl + 1
+        wl = tr - target
+        wr = 1 - wl
+        return (TF.cross_entropy(pred_dist, tl.viet(-1), reduction ='none').view(tl.shape) * wl + TF.cross_entropy(pred_dist, tr.view(-1), reduction='none').view(tl.shape) * wr).mean(-1, keepdim=True)
 
 
 
