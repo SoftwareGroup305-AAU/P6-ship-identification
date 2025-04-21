@@ -10,15 +10,15 @@ from torchvision.ops import nms
 # Define transformations
 train_transforms = transforms.Compose([
     transforms.ToPILImage(),
-    transforms.Resize((448, 448)),
+    transforms.Resize((640, 640)),
     transforms.RandomHorizontalFlip(),
     transforms.ColorJitter(brightness=0.2, contrast=0.2),
     transforms.ToTensor()
 ])
 
 # Paths
-model_file = r"yolo_custom_best.pth"
-test_img = r"yolo/data/test/images/images.jpeg"
+model_file = r"yolo_custom_best copy.pth"
+test_img = r"yolo/data/test/images/skib.jpg"
 
 # Load and preprocess the image
 img = read_image(test_img)

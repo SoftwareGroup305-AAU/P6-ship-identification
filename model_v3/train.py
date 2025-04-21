@@ -90,7 +90,7 @@ def distributed_focal_loss(pred, target, reg_max=16):
     target: float tensor of shape [B, H, W, 4], continuous values in [0, reg_max)
     """
     bbox = pred['p3']['bbox']
-
+    
     B, C, H, W = bbox.shape
     assert C == 4 * reg_max, f"Expected {4 * reg_max} channels, got {C}"
 
@@ -118,7 +118,7 @@ def distributed_focal_loss(pred, target, reg_max=16):
 
         total_loss += dfl.mean()
 
-    return total_loss / 4  # average across 4 box coordinates
+    return total_loss / 2  # average across 4 box coordinates
                 
         
 
