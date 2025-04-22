@@ -50,8 +50,7 @@ class YOLOLoss(nn.Module):
         cls_targets = torch.zeros(B, H, W, self.num_classes, device=device)
 
         for batch_idx, targets in enumerate(raw_targets):
-            for i in range(0, len(targets), 5):  # Tag 5 værdier ad gangen
-                target = targets[i:i+5]  # increment 5 værdier ad gangen
+            for target in targets:  # Tag 5 værdier ad gangen 
                 
                 c, x, y, w, h = target
 
