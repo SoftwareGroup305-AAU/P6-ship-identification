@@ -18,7 +18,9 @@ def CompLoss():
     
     return (CIoULoss() * 0.6) + (distributed_focal_loss() * 0.4)
 
-def CIoULoss():
+def CIoULoss(pred, target: torch.Tensor):
+    obj_mask = (target > 0)
+    
     loss = ops.complete_box_iou_loss()
     return loss
 

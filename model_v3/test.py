@@ -17,8 +17,8 @@ train_transforms = transforms.Compose([
 ])
 
 # Paths
-model_file = r"yolo_custom_best copy.pth"
-test_img = r"yolo/data/test/images/skib.jpg"
+model_file = r"yolo_custom.pth"
+test_img = r"warship.jpg"
 
 # Load and preprocess the image
 img = read_image(test_img)
@@ -34,7 +34,7 @@ with torch.no_grad():
     predictions = model(img)
 
 # Decode function with correct stride and clamping/sanity filtering
-def decode_dfl_predictions(pred_bbox, pred_cls, reg_max=16, conf_thresh=0.3, stride=8, img_size=640):
+def decode_dfl_predictions(pred_bbox, pred_cls, reg_max=16, conf_thresh=0.5, stride=8, img_size=640):
     B, _, H, W = pred_bbox.shape
     device = pred_bbox.device
 
