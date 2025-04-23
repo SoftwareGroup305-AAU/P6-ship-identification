@@ -56,17 +56,18 @@ train_loader = DataLoader(train_data, batch_size=Config.batch_size,
                          shuffle=True, collate_fn=collate_fn)
 
 # Target Builder
-def build_targets(targets_list, feat_size=Config.feat_size, reg_max=Config.reg_max):
+def build_targets(targets_list, feat_size=Config.feat_size, reg_max=Config.reg_max, num_classes=Config.num_classes):
     B = len(targets_list)
     H, W = feat_size
     dfl_targets = torch.zeros((B, H, W, 4), dtype=torch.float32)
     ciou_targets = torch.zeros((B, H, W, 4), dtype=torch.float32)
-
+    cls_targets = torch.zeros((B, H, W, num_classes), dtype=torch.float32)  # One-hot encoded
+    
     for b, targets in enumerate(targets_list):
         for t in targets:
             if len(t) != 5: continue
             
-            _, cx, cy, w, h = t  # Normalized [0,1]
+            cls_idx, cx, cy, w, h = t  # Normalized [0,1]
             gx, gy = cx * W, cy * H
             gw, gh = w * W, h * H
             
@@ -88,8 +89,13 @@ def build_targets(targets_list, feat_size=Config.feat_size, reg_max=Config.reg_m
                 # Normalized CIoU targets
                 ciou_targets[int(b), gj, gi] = torch.tensor(
                     [x1/W, y1/H, x2/W, y2/H])
+                
+                # Class targets (one-hot)
+                cls_targets[int(b), gj, gi, int(cls_idx)] = 1.0
     
-    return dfl_targets.to(Config.device), ciou_targets.to(Config.device)
+    return (dfl_targets.to(Config.device), 
+            ciou_targets.to(Config.device),
+            cls_targets.to(Config.device))
 
 # Loss Functions
 def ciou_loss(preds, targets):
@@ -124,6 +130,44 @@ def ciou_loss(preds, targets):
         return ops.complete_box_iou_loss(
             pred_boxes[mask], target_boxes[mask], reduction='mean')
     return torch.tensor(0.0, device=pred_boxes.device)
+
+def focal_loss(preds, targets, alpha=0.25, gamma=2.0):
+    """
+    Focal loss for classification.
+    preds: dict with 'p3', 'p5', 'p7' each containing 'cls' logits
+    targets: float tensor of shape [B, H, W, num_classes] (one-hot)
+    """
+    total_loss = 0.0
+    num_levels = 0
+    
+        # Get predictions and reshape
+    cls_pred = preds["p3"]['cls']  # [B, C, H, W]
+    B, C, H, W = cls_pred.shape
+    cls_pred = cls_pred.permute(0, 2, 3, 1).reshape(-1, C)  # [B*H*W, C]
+            
+            # Get targets and reshape
+    cls_target = targets.reshape(-1, C)  # [B*H*W, C]
+            
+            # Compute probabilities
+    pred_prob = torch.sigmoid(cls_pred)
+            
+            # Focal loss calculation
+    cross_entropy = - (cls_target * torch.log(pred_prob) + 
+                            (1 - cls_target) * torch.log(1 - pred_prob))
+            
+            # Modulating factor
+    p_t = cls_target * pred_prob + (1 - cls_target) * (1 - pred_prob)
+    modulating_factor = (1.0 - p_t) ** gamma
+            
+            # Alpha weighting
+    alpha_factor = cls_target * alpha + (1 - cls_target) * (1 - alpha)
+            
+            # Final loss
+    focal_loss = modulating_factor * alpha_factor * cross_entropy
+    total_loss += focal_loss.mean()
+    num_levels += 1
+    
+    return total_loss / max(num_levels, 1)
 
 def distributed_focal_loss(pred, target, reg_max=16):
     """
@@ -183,12 +227,18 @@ def train(model, loader, optimizer, device):
         
         for batch_idx, (images, targets) in enumerate(loader):
             images = images.to(device)
-            dfl_targets, ciou_targets = build_targets(targets)
+            dfl_targets, ciou_targets, cls_targets = build_targets(targets)
             
             # Forward pass
             outputs = model(images)
-            loss = (distributed_focal_loss(outputs, dfl_targets) + 
-                    ciou_loss(outputs, ciou_targets))
+            
+            # Calculate losses
+            dfl_loss = distributed_focal_loss(outputs, dfl_targets)
+            ciou_l = ciou_loss(outputs, ciou_targets)
+            cls_l = focal_loss(outputs, cls_targets)
+            
+            # Combined loss (you can adjust weights as needed)
+            loss = dfl_loss + ciou_l + cls_l
             
             # Backward pass
             optimizer.zero_grad()
@@ -208,7 +258,9 @@ def train(model, loader, optimizer, device):
                 lr = optimizer.param_groups[0]['lr']
                 print(f"Epoch {epoch+1}/{Config.epochs} | "
                       f"Batch {batch_idx+1}/{len(loader)} | "
-                      f"Loss: {avg_loss:.4f} | LR: {lr:.2e}")
+                      f"Loss: {avg_loss:.4f} (DFL: {dfl_loss:.2f}, "
+                      f"CIoU: {ciou_l:.2f}, CLS: {cls_l:.2f}) | "
+                      f"LR: {lr:.2e}")
         
         # End of epoch
         avg_loss = epoch_loss / len(loader)
