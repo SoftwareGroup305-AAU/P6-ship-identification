@@ -3,21 +3,15 @@ import torch.nn as nn
 import torch.nn.functional as TF
 
 
-class FocalLoss(nn.Module):
-    #alpha: Balances importance of different classes
-    #       Default is 1.0 (no change
-    #gamma: Controls the focus on harder examples. Larger values place more emphasis on hard-to-classify samples.
-    #       Default is 2.0.(no change
-    def __init__(self, alpha=0.25, gamma=2.0):
+class VarifocalLoss(nn.Module):
+    def __init__(self, gamma=2.0):
         super().__init__()
-        self.alpha = alpha
         self.gamma = gamma
 
     def forward(self, inputs, targets):
-        BCE_loss = TF.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
-        pt = torch.exp(-BCE_loss)
-        focal_loss = self.alpha * (1 - pt) ** self.gamma * BCE_loss
-        return focal_loss.mean()
+        pred_sigmoid = torch.sigmoid(inputs)
+        loss = -targets * pred_sigmoid.pow(self.gamma) * torch.log(pred_sigmoid + 1e-8)
+        return loss.mean()
 
 
 
@@ -27,7 +21,7 @@ class YOLOLoss(nn.Module):
         self.reg_max = reg_max
         self.num_classes = num_classes
         self.device = device
-        self.focal = FocalLoss()
+        self.focal = VarifocalLoss()
 
     def forward(self, raw_preds, raw_targets):
         total_loss = 0.0
