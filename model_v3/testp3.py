@@ -18,7 +18,7 @@ train_transforms = transforms.Compose([
 
 # Paths
 model_file = r"model_v3\yolo_custom.pth"
-test_img = r"sail_boat2.jpg"
+test_img = r"ship2.jpg"
 
 # Load and preprocess the image
 img = read_image(test_img)
@@ -29,15 +29,17 @@ model = YOLO(num_classes=11)
 model.load_state_dict(torch.load(model_file, map_location=torch.device("cpu")))
 model.eval()
 
-# Forward pass
+# Forward pass - we'll only use p3 outputs
 with torch.no_grad():
     predictions = model(img)
+    p3_pred = predictions["p3"]  # Only use p3 scale
 
-# Decode function with correct stride and clamping/sanity filtering
+# Decode function for p3 predictions (stride=8)
 def decode_dfl_predictions(pred_bbox, pred_cls, reg_max=16, conf_thresh=0.15, stride=8, img_size=640):
     B, _, H, W = pred_bbox.shape
     device = pred_bbox.device
 
+    # Decode distribution to box coordinates
     pred_bbox = pred_bbox.view(B, 4, reg_max, H, W).permute(0, 3, 4, 1, 2)
     pred_bbox = F.softmax(pred_bbox, dim=-1)
     pred_bbox = pred_bbox @ torch.arange(reg_max).float().to(device)
@@ -51,6 +53,7 @@ def decode_dfl_predictions(pred_bbox, pred_cls, reg_max=16, conf_thresh=0.15, st
                 x_center = (j + 0.5) * stride
                 y_center = (i + 0.5) * stride
 
+                # Calculate box coordinates with clamping
                 x_min = max(0, min(x_center - l * stride, img_size))
                 y_min = max(0, min(y_center - t * stride, img_size))
                 x_max = max(0, min(x_center + r * stride, img_size))
@@ -59,10 +62,12 @@ def decode_dfl_predictions(pred_bbox, pred_cls, reg_max=16, conf_thresh=0.15, st
                 w = x_max - x_min
                 h = y_max - y_min
 
+                # Process class predictions
                 class_logits = pred_cls[b, :, i, j]
                 class_scores = torch.softmax(class_logits, dim=0)
                 score, class_id = torch.max(class_scores, dim=0)
 
+                # Filter predictions
                 if score.item() > conf_thresh and w > 1 and h > 1:
                     boxes.append([x_min, y_min, x_max, y_max])
                     scores.append(score.item())
@@ -70,26 +75,22 @@ def decode_dfl_predictions(pred_bbox, pred_cls, reg_max=16, conf_thresh=0.15, st
 
     return boxes, scores, class_ids
 
-# Decode and combine predictions from all scales with correct stride per scale
-all_boxes, all_scores, all_class_ids = [], [], []
-scale_strides = {"p3": 8, "p5": 16, "p7": 32}
-for scale in ["p3", "p5", "p7"]:
-    b, s, c = decode_dfl_predictions(
-        predictions[scale]["bbox"], predictions[scale]["cls"], stride=scale_strides[scale]
-    )
-    all_boxes.extend(b)
-    all_scores.extend(s)
-    all_class_ids.extend(c)
+# Decode only p3 predictions
+boxes, scores, class_ids = decode_dfl_predictions(
+    p3_pred["bbox"], 
+    p3_pred["cls"], 
+    stride=8  # p3 has stride 8
+)
 
-# Apply NMS across all boxes
-if all_boxes:
-    boxes_tensor = torch.tensor(all_boxes)
-    scores_tensor = torch.tensor(all_scores)
+# Apply NMS
+if boxes:
+    boxes_tensor = torch.tensor(boxes)
+    scores_tensor = torch.tensor(scores)
     keep = nms(boxes_tensor, scores_tensor, iou_threshold=0.5)
-
-    final_boxes = [all_boxes[i] for i in keep]
-    final_scores = [all_scores[i] for i in keep]
-    final_class_ids = [all_class_ids[i] for i in keep]
+    
+    final_boxes = [boxes[i] for i in keep]
+    final_scores = [scores[i] for i in keep]
+    final_class_ids = [class_ids[i] for i in keep]
 else:
     final_boxes, final_scores, final_class_ids = [], [], []
 
