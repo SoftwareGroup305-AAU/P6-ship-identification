@@ -1,13 +1,13 @@
 import torch
-import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 from torchvision import transforms, ops
-import math
 from dataset import YOLODataset
 from core import YOLO
-import torch.nn.functional as F
-from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR
+
+import math
 
 # Configurations
 class Config:
@@ -17,7 +17,7 @@ class Config:
     # Training
     batch_size = 16
     epochs = 50
-    initial_lr = 0.001
+    initial_lr = 0.0001
     warmup_epochs = 5
     reg_max = 16
     
@@ -27,8 +27,8 @@ class Config:
     num_classes = 11
     
     # Paths
-    train_images = "yolo/data/train/images/"
-    train_labels = "yolo/data/train/labels/"
+    train_images = "data/train/images/"
+    train_labels = "data/train/labels/"
     model_save_path = "yolo_custom.pth"
 
 # Initialize
@@ -97,113 +97,120 @@ def build_targets(targets_list, feat_size=Config.feat_size, reg_max=Config.reg_m
             ciou_targets.to(Config.device),
             cls_targets.to(Config.device))
 
-# Loss Functions
-def ciou_loss(preds, targets):
-    """Compute CIoU loss using torchvision's optimized implementation"""
-    bbox = preds['p3']['bbox']
-    B, C, H, W = bbox.shape
-    reg_max = C // 4
-    
-    # Convert DFL predictions to boxes
-    bbox = bbox.view(B, 4, reg_max, H, W).softmax(dim=2)
-    grid = torch.arange(reg_max, device=bbox.device, dtype=torch.float)
-    pred_dist = (bbox * grid.view(1,1,-1,1,1)).sum(2)  # [B,4,H,W]
-    pred_dist = pred_dist.permute(0,2,3,1)  # [B,H,W,4]
-    
-    # Grid centers
-    cx = torch.arange(W, device=bbox.device).view(1,1,W) + 0.5
-    cy = torch.arange(H, device=bbox.device).view(1,H,1) + 0.5
-    
-    # Convert to [x1,y1,x2,y2] format
-    pred_boxes = torch.stack([
-        cx - pred_dist[...,0],  # x1
-        cy - pred_dist[...,1],  # y1
-        cx + pred_dist[...,2],  # x2
-        cy + pred_dist[...,3]   # y2
-    ], dim=-1).reshape(-1,4)
-    
-    # Filter valid targets
-    target_boxes = targets.reshape(-1,4)
-    mask = target_boxes.sum(dim=1) != 0
-    
-    if mask.any():
-        return ops.complete_box_iou_loss(
-            pred_boxes[mask], target_boxes[mask], reduction='mean')
-    return torch.tensor(0.0, device=pred_boxes.device)
+def ciou_loss(preds, targets, scales=['p3', 'p5', 'p7'], reg_max=16):
+    """Compute CIoU loss across scales using torchvision.ops.complete_box_iou_loss"""
+    total_loss = 0.0
+    num_levels = 0
 
-def focal_loss(preds, targets, alpha=0.25, gamma=2.0):
+    for scale in scales:
+        bbox = preds[scale]['bbox']
+        B, C, H, W = bbox.shape
+        assert C == 4 * reg_max, f"Expected {4 * reg_max}, got {C}"
+
+        bbox = bbox.view(B, 4, reg_max, H, W).softmax(dim=2)
+        grid = torch.arange(reg_max, device=bbox.device, dtype=torch.float32)
+        dist = (bbox * grid.view(1, 1, -1, 1, 1)).sum(2)  # [B, 4, H, W]
+        dist = dist.permute(0, 2, 3, 1)  # [B, H, W, 4]
+
+        cx = torch.arange(W, device=dist.device).float().view(1, 1, W) + 0.5
+        cy = torch.arange(H, device=dist.device).float().view(1, H, 1) + 0.5
+        cx = cx.expand(B, H, W)
+        cy = cy.expand(B, H, W)
+
+        x1 = cx - dist[..., 0]
+        y1 = cy - dist[..., 1]
+        x2 = cx + dist[..., 2]
+        y2 = cy + dist[..., 3]
+        pred_boxes = torch.stack([x1, y1, x2, y2], dim=-1).reshape(-1, 4)
+
+        t_resized = F.interpolate(targets.permute(0, 3, 1, 2), size=(H, W), mode='bilinear', align_corners=False)
+        t_resized = t_resized.permute(0, 2, 3, 1).contiguous().reshape(-1, 4)
+
+        mask = (t_resized.sum(dim=1) != 0)
+
+        if mask.any():
+            loss = ops.complete_box_iou_loss(pred_boxes[mask], t_resized[mask], reduction='mean')
+            total_loss += loss
+            num_levels += 1
+
+    if num_levels == 0:
+        return torch.tensor(0.0, device=targets.device)
+    
+    return total_loss / num_levels
+
+def focal_loss(preds, targets, alpha=0.25, gamma=2.0, scales=['p3', 'p5', 'p7']):
     """
-    Focal loss for classification.
-    preds: dict with 'p3', 'p5', 'p7' each containing 'cls' logits
-    targets: float tensor of shape [B, H, W, num_classes] (one-hot)
+    Focal loss using same target for all scales.
+    preds: dict with keys like 'p3', 'p5', 'p7' each with 'cls' logits [B, C, H, W]
+    targets: [B, H_t, W_t, C] one-hot class map (resized for each scale inside)
     """
     total_loss = 0.0
     num_levels = 0
-    
-        # Get predictions and reshape
-    cls_pred = preds["p3"]['cls']  # [B, C, H, W]
-    B, C, H, W = cls_pred.shape
-    cls_pred = cls_pred.permute(0, 2, 3, 1).reshape(-1, C)  # [B*H*W, C]
-            
-            # Get targets and reshape
-    cls_target = targets.reshape(-1, C)  # [B*H*W, C]
-            
-            # Compute probabilities
-    pred_prob = torch.sigmoid(cls_pred)
-            
-            # Focal loss calculation
-    cross_entropy = - (cls_target * torch.log(pred_prob) + 
-                            (1 - cls_target) * torch.log(1 - pred_prob))
-            
-            # Modulating factor
-    p_t = cls_target * pred_prob + (1 - cls_target) * (1 - pred_prob)
-    modulating_factor = (1.0 - p_t) ** gamma
-            
-            # Alpha weighting
-    alpha_factor = cls_target * alpha + (1 - cls_target) * (1 - alpha)
-            
-            # Final loss
-    focal_loss = modulating_factor * alpha_factor * cross_entropy
-    total_loss += focal_loss.mean()
-    num_levels += 1
-    
+
+    for scale in scales:
+        cls_pred = preds[scale]['cls']  # [B, C, H, W]
+        B, C, H, W = cls_pred.shape
+
+        cls_target = F.interpolate(targets.permute(0, 3, 1, 2).float(), size=(H, W), mode='nearest')
+        cls_target = cls_target.permute(0, 2, 3, 1).reshape(-1, C)  # [B*H*W, C]
+
+        cls_pred = cls_pred.permute(0, 2, 3, 1).reshape(-1, C)      # [B*H*W, C]
+        pred_prob = torch.sigmoid(cls_pred)
+
+        ce_loss = -(cls_target * torch.log(pred_prob + 1e-8) + (1 - cls_target) * torch.log(1 - pred_prob + 1e-8))
+
+        p_t = cls_target * pred_prob + (1 - cls_target) * (1 - pred_prob)
+        modulating_factor = (1.0 - p_t) ** gamma
+        alpha_factor = cls_target * alpha + (1 - cls_target) * (1 - alpha)
+
+        loss = modulating_factor * alpha_factor * ce_loss
+        total_loss += loss.mean()
+        num_levels += 1
+
     return total_loss / max(num_levels, 1)
 
-def distributed_focal_loss(pred, target, reg_max=16):
+def distributed_focal_loss(pred, target, reg_max=16, scales=['p3', 'p5', 'p7']):
     """
-    pred: model output dict with 'p3' containing 'bbox' logits of shape [B, 4 * reg_max, H, W]
+    pred: dict of model outputs per scale, each containing 'bbox' logits of shape [B, 4 * reg_max, H, W]
     target: float tensor of shape [B, H, W, 4], continuous values in [0, reg_max)
     """
-    bbox = pred['p3']['bbox']
-    
-    B, C, H, W = bbox.shape
-    assert C == 4 * reg_max, f"Expected {4 * reg_max} channels, got {C}"
-
-    # Reshape to proper format
-    bbox = bbox.view(B, 4, reg_max, H, W).permute(0, 3, 4, 1, 2).contiguous()
-
-    target = target.to(bbox.device).float()
-
     total_loss = 0.0
-    for i in range(4):  # For each of the 4 box coordinates
-        pred_dist = bbox[..., i, :]
-        t = target[..., i]            
+    num_levels = 0
 
-        tl = t.long()
-        tr = tl + 1
-        wl = tr - t
-        wr = 1 - wl
+    for scale in scales:
+        bbox = pred[scale]['bbox']  # [B, 4*reg_max, H, W]
+        B, C, H, W = bbox.shape
+        assert C == 4 * reg_max, f"Expected {4 * reg_max} channels, got {C}"
 
-        tl = torch.clamp(tl, 0, reg_max - 1)
-        tr = torch.clamp(tr, 0, reg_max - 1)
+        bbox = bbox.view(B, 4, reg_max, H, W).permute(0, 3, 4, 1, 2).contiguous()
+        bbox = bbox.view(B, H * W, 4, reg_max)  # [B, HW, 4, reg_max]
 
-        loss_l = F.cross_entropy(pred_dist.view(-1, reg_max), tl.view(-1), reduction='none').view(t.shape)
-        loss_r = F.cross_entropy(pred_dist.view(-1, reg_max), tr.view(-1), reduction='none').view(t.shape)
-        dfl = loss_l * wl + loss_r * wr
+        t_resized = F.interpolate(target.permute(0, 3, 1, 2), size=(H, W), mode='bilinear', align_corners=False)
+        t_resized = t_resized.permute(0, 2, 3, 1).contiguous().view(B, H * W, 4).float().to(bbox.device)
 
-        total_loss += dfl.mean()
+        for i in range(4):  # 4 box coordinates
+            pred_dist = bbox[..., i, :]  # [B, HW, reg_max]
+            t = t_resized[..., i]        # [B, HW]
 
-    return total_loss / 2  # average across 4 box coordinates
+            tl = t.long()
+            tr = tl + 1
+            wl = tr - t
+            wr = 1 - wl
+
+            tl = torch.clamp(tl, 0, reg_max - 1)
+            tr = torch.clamp(tr, 0, reg_max - 1)
+            pred_dist = torch.clamp(pred_dist, min=-30, max=30)
+
+            loss_l = F.cross_entropy(pred_dist.view(-1, reg_max), tl.view(-1), reduction='none').view(B, H * W)
+            loss_r = F.cross_entropy(pred_dist.view(-1, reg_max), tr.view(-1), reduction='none').view(B, H * W)
+            dfl = loss_l * wl + loss_r * wr
+
+            total_loss += dfl.mean()
+        num_levels += 1
+
+    return total_loss / (2 * num_levels)
+
+
 
 # Training Setup
 optimizer = optim.AdamW(model.parameters(), lr=Config.initial_lr)
@@ -232,14 +239,17 @@ def train(model, loader, optimizer, device):
             # Forward pass
             outputs = model(images)
             
+            if (math.isnan(outputs['p3']['bbox'].mean())):
+                print("")
+            
             # Calculate losses
             dfl_loss = distributed_focal_loss(outputs, dfl_targets)
-            ciou_l = ciou_loss(outputs, ciou_targets)
-            cls_l = focal_loss(outputs, cls_targets)
+            bbox_loss = ciou_loss(outputs, ciou_targets)
+            cls_loss = focal_loss(outputs, cls_targets)
             
             # Combined loss (you can adjust weights as needed)
-            loss = dfl_loss + ciou_l + cls_l
-            
+            loss = dfl_loss + bbox_loss + cls_loss
+
             # Backward pass
             optimizer.zero_grad()
             loss.backward()
@@ -259,7 +269,7 @@ def train(model, loader, optimizer, device):
                 print(f"Epoch {epoch+1}/{Config.epochs} | "
                       f"Batch {batch_idx+1}/{len(loader)} | "
                       f"Loss: {avg_loss:.4f} (DFL: {dfl_loss:.2f}, "
-                      f"CIoU: {ciou_l:.2f}, CLS: {cls_l:.2f}) | "
+                      f"CIoU: {bbox_loss:.2f}, CLS: {cls_loss:.2f}) | "
                       f"LR: {lr:.2e}")
         
         # End of epoch
