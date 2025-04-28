@@ -10,7 +10,9 @@ class VarifocalLoss(nn.Module):
 
     def forward(self, inputs, targets):
         pred_sigmoid = torch.sigmoid(inputs)
-        loss = -targets * pred_sigmoid.pow(self.gamma) * torch.log(pred_sigmoid + 1e-8)
+        focal_weight = targets * (targets > 0).float() + pred_sigmoid.pow(self.gamma) * (targets <= 0).float()
+        loss = -(targets * torch.log(pred_sigmoid + 1e-8) + (1 - targets) * torch.log(1 - pred_sigmoid + 1e-8))
+        loss *= focal_weight
         return loss.mean()
 
 
@@ -69,15 +71,6 @@ class YOLOLoss(nn.Module):
         wr = 1 - wl
         return (TF.cross_entropy(pred_dist, tl.view(-1), reduction ='none').view(tl.shape) * wl + TF.cross_entropy(pred_dist, tr.view(-1), reduction='none').view(tl.shape) * wr).mean(-1, keepdim=True)
 
-
-
-
-
-                
-        
-
-
-        
 
 
 
