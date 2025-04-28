@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 
 # Class names
-names = ['Boat', 'Cargo-Ship', 'Carrier-Ship', 'Container-Ship', 'Cruise-Ship', 
+names = ['Boat', 'Cargo-Ship', 'Carrier-Ship', 'Container-Ship', 'Cruise-ship', 
          'Fish-Boat', 'Sail-Boat', 'Submarine', 'Tanker-Ship', 'Tugboat', 'War-Ship']
 
 # Define transformations
@@ -22,7 +22,7 @@ train_transforms = transforms.Compose([
 
 # Paths
 model_file = r"model_v3\yolo_custom.pth"
-test_img = r"sail_boat2.jpg"
+test_img = r"boat2.jpg"
 
 # Load and preprocess the image
 img = read_image(test_img)
@@ -53,21 +53,8 @@ def create_heatmap(pred_cls, pred_bbox, scale="p3"):
     
     return heatmap.numpy()
 
-# Create heatmaps for each scale
-plt.figure(figsize=(15, 5))
-for idx, scale in enumerate(["p3", "p5", "p7"]):
-    heatmap = create_heatmap(predictions[scale]["cls"], predictions[scale]["bbox"], scale)
-    
-    plt.subplot(1, 3, idx+1)
-    plt.title(f"Heatmap for {scale}")
-    plt.imshow(heatmap, cmap='hot', interpolation='nearest')
-    plt.colorbar(label='Confidence')
-
-plt.tight_layout()
-plt.show()
-
 # Decode function with correct stride and clamping/sanity filtering
-def decode_dfl_predictions(pred_bbox, pred_cls, reg_max=16, conf_thresh=0.5, stride=8, img_size=640):
+def decode_dfl_predictions(pred_bbox, pred_cls, reg_max=16, conf_thresh=0.15, stride=8, img_size=640):
     B, _, H, W = pred_bbox.shape
     device = pred_bbox.device
 
@@ -132,20 +119,36 @@ if all_boxes:
 else:
     final_boxes, final_scores, final_class_ids = [], [], []
 
-# Visualization
-fig, ax = plt.subplots(1, figsize=(10, 10))
-ax.imshow(pil_img)
+# Create a single figure with all visualizations
+plt.figure(figsize=(20, 10))
 
+# Plot heatmaps
+for idx, scale in enumerate(["p3", "p5", "p7"]):
+    heatmap = create_heatmap(predictions[scale]["cls"], predictions[scale]["bbox"], scale)
+    plt.subplot(2, 3, idx+1)
+    plt.title(f"Heatmap for {scale}")
+    plt.imshow(heatmap, cmap='hot', interpolation='nearest')
+    plt.colorbar(label='Confidence')
+
+# Plot final detections
+plt.subplot(2, 3, 4)
+plt.imshow(pil_img)
+plt.title("Original Image")
+plt.axis('off')
+
+plt.subplot(2, 3, (5,6))  # Span two columns for the detection image
+plt.imshow(pil_img)
 for box, score, class_id in zip(final_boxes, final_scores, final_class_ids):
     x_min, y_min, x_max, y_max = box
     rect = patches.Rectangle(
         (x_min, y_min), x_max - x_min, y_max - y_min,
         linewidth=1, edgecolor='r', facecolor='none'
     )
-    ax.add_patch(rect)
-    ax.text(x_min, y_min - 5, f"{names[class_id]}: {score:.2f}", color='white',
+    plt.gca().add_patch(rect)
+    plt.gca().text(x_min, y_min - 5, f"{names[class_id]}: {score:.2f}", color='white',
             fontsize=8, bbox=dict(facecolor='red', alpha=0.5))
-
 plt.title(f"Detected {len(final_boxes)} objects")
 plt.axis('off')
+
+plt.tight_layout()
 plt.show()
