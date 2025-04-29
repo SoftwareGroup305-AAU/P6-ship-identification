@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 
 class YOLOv1(nn.Module):
-    def __init__(self, grid_size=7, number_of_bboxes=2, number_of_classes=20):
+    def __init__(self, number_of_bboxes=2, number_of_classes=20):
         super(YOLOv1, self).__init__()
-        self.S = grid_size
+        self.S = 7
         self.B = number_of_bboxes
         self.C = number_of_classes
 
@@ -51,7 +51,7 @@ class YOLOv1(nn.Module):
             nn.Linear(1024 * 7 * 7, 4096),
             nn.LeakyReLU(0.1, inplace=True),
             nn.Dropout(0.5),
-            nn.Linear(4096, grid_size * grid_size * (number_of_bboxes * 5 + number_of_classes))
+            nn.Linear(4096, self.S * self.S * (self.B * 5 + self.C))
         )
 
     def forward(self, x):

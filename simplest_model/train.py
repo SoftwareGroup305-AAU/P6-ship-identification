@@ -3,84 +3,122 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from utilities import generate_targets
+from utilities import generate_targets, yolo_loss
 from dataset import YOLODataset
 from core import YOLOv1
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"device: {device}")
+# Configuration
+class Config:
+    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+    TRAIN_IMAGES_DIR = "yolo/data/train/images/"
+    TRAIN_LABELS_DIR = "yolo/data/train/labels/"
+    BATCH_SIZE = 16
+    NUM_CLASSES = 11  # Should be 2 for final dataset
+    NUM_BBOXES = 2
+    LEARNING_RATE = 0.0001
+    EPOCHS = 50
+    SAVE_PATH_BEST = "yolo_custom_best.pth"
+    SAVE_PATH_LAST = "yolo_custom_last.pth"
+    SAVE_PATH_FINAL = "yolo_custom.pth"
 
-training_images_dir = "yolo/data/train/images/"
-training_labels_dir = "yolo/data/train/labels/"
+def create_dataloader():
+    """Create and return the training DataLoader"""
+    transform = transforms.Compose([
+        transforms.ToPILImage(),
+        transforms.Resize((448, 448)),
+        transforms.ToTensor()
+    ])
 
-train_transforms = transforms.Compose([
-    transforms.ToPILImage(),
-    transforms.Resize((448, 448)),
-    transforms.RandomHorizontalFlip(),
-    transforms.ColorJitter(brightness=0.2, contrast=0.2),
-    transforms.ToTensor()
-])
+    def collate_fn(batch):
+        images, targets = zip(*batch)
+        return torch.stack(images), list(targets)
 
-def collate_fn(batch):
-    images, targets = zip(*batch)
-    images = torch.stack(images)
-    return images, list(targets)
+    dataset = YOLODataset(
+        Config.TRAIN_IMAGES_DIR,
+        Config.TRAIN_LABELS_DIR,
+        transform
+    )
+    return DataLoader(
+        dataset,
+        batch_size=Config.BATCH_SIZE,
+        shuffle=True,
+        collate_fn=collate_fn
+    )
 
-training_data = YOLODataset(training_images_dir, training_labels_dir, train_transforms)
-dataloader = DataLoader(training_data, batch_size=16, shuffle=True, collate_fn=collate_fn) # trying smaller batch size, should be better and less resource intensive according to some paper
+def setup_model():
+    """Initialize model and optimizer"""
+    model = YOLOv1(
+        number_of_bboxes=Config.NUM_BBOXES,
+        number_of_classes=Config.NUM_CLASSES
+    ).to(Config.DEVICE)
+    
+    # Multi-GPU support (commented out as per your note)
+    # if torch.cuda.device_count() > 1:
+    #     model = nn.DataParallel(model)
+    
+    optimizer = optim.Adam(model.parameters(), lr=Config.LEARNING_RATE)
+    return model, optimizer
 
-num_classes = 11 # should be 2 when we get the proper data set
-model = YOLOv1(grid_size=7, number_of_bboxes=2, number_of_classes=11)
-model.to(device)
-gpu_count = torch.cuda.device_count()
-# if gpu_count > 1:
-#     model = nn.DataParallel(model, device_ids=[id for id in range(gpu_count)], output_device=0)
-
-#↑↑↑ cant get multi-gpu to work for now↑↑↑
-
-print(f"Using { 1 if gpu_count >= 1 else 0} GPUs")
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-criterion = None
-
-epochs = 50
-
-def train(model, dataloader, optimizer, criterion, device, epochs):
+def train(model, dataloader, optimizer, device):
+    """Training loop"""
+    best_loss = float('inf')
     model.train()
-    best_loss = float("inf")
-    inc = 0
-    run_loss = 0
-    avg_loss = 0
-    for epoch in range(epochs):
-        epoch_loss = 0
-        for idx, data in enumerate(dataloader):
-            images, raw_targets = data
-            # if (inc >= 150):
-            #     break
+    
+    for epoch in range(Config.EPOCHS):
+        running_loss = 0.0
+        epoch_loss = 0.0
+        
+        for batch_idx, (images, raw_targets) in enumerate(dataloader, 1):
+            # Move data to device
             images = images.to(device)
             raw_targets = [target.to(device) for target in raw_targets]
+            
+            # Forward pass
             optimizer.zero_grad()
-            output = model(images)
-            targets = generate_targets(output, raw_targets, number_of_bboxes=2)
-            loss = criterion(class_predictions, objectness_predictions, localization_predictions, raw_targets, device)
+            outputs = model(images)
+            targets = generate_targets(outputs, raw_targets, Config.NUM_BBOXES)
+            loss = yolo_loss(outputs, targets, Config.NUM_BBOXES)
+            
+            # Backward pass
             loss.backward()
             optimizer.step()
+            
+            # Logging
+            running_loss += loss.item()
             epoch_loss += loss.item()
-            run_loss += loss.item()
-            if idx % 10== 9: 
-                print(f"[{epoch+1}, {idx+1:5d}] loss: {run_loss / 10:.3f}")
-                run_loss = 0
-            # print(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss / len(dataloader)}")
-            # print(f"Run {inc+1}/150, Run Loss: {run_loss}")
-            inc += 1
-            avg_loss += run_loss
-        epoch_loss_avg = epoch_loss / inc
-        print(f"Average Loss for Epoch: {epoch_loss_avg}")
-        inc = 0
-        torch.save(model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict(), "yolo_custom_last.pth")
-        if (epoch_loss_avg < best_loss):
-            torch.save(model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict(), "yolo_custom_best.pth")
-            best_loss = epoch_loss_avg
+            
+            if batch_idx % 10 == 0:
+                avg_loss = running_loss / 10
+                print(f"Epoch [{epoch+1}/{Config.EPOCHS}] "
+                      f"Batch [{batch_idx}/{len(dataloader)}] "
+                      f"Loss: {avg_loss:.3f}")
+                running_loss = 0.0
+        
+        # Epoch summary
+        epoch_avg_loss = epoch_loss / len(dataloader)
+        print(f"Epoch [{epoch+1}/{Config.EPOCHS}] "
+              f"Average Loss: {epoch_avg_loss:.3f}")
+        
+        # Save checkpoints
+        state_dict = model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict()
+        torch.save(state_dict, Config.SAVE_PATH_LAST)
+        
+        if epoch_avg_loss < best_loss:
+            torch.save(state_dict, Config.SAVE_PATH_BEST)
+            best_loss = epoch_avg_loss
 
-train(model, dataloader, optimizer, criterion, device, epochs)
+def main():
+    print(f"Using device: {Config.DEVICE}")
+    print(f"Number of GPUs available: {torch.cuda.device_count()}")
+    
+    dataloader = create_dataloader()
+    model, optimizer = setup_model()
+    
+    train(model, dataloader, optimizer, Config.DEVICE)
+    
+    # Save final model
+    state_dict = model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict()
+    torch.save(state_dict, Config.SAVE_PATH_FINAL)
 
-torch.save(model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict(), "yolo_custom.pth")
+if __name__ == "__main__":
+    main()
