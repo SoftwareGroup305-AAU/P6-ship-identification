@@ -17,7 +17,7 @@ train_transforms = transforms.Compose([
 ])
 
 # Paths
-model_file = r"model_v3/server/modelsBackup/model3BestEpoch8s.pth"
+model_file = r"model_v3/server/modelsBackup/Model3Best.pth"
 test_img = r"ship.jpg"
 
 # Load and preprocess the image
