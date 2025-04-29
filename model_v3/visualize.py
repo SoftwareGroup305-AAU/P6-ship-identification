@@ -6,23 +6,29 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from torchvision.ops import nms
+import numpy as np
+from PIL import Image
+
+# Class names
+names = ['Boat', 'Cargo-Ship', 'Carrier-Ship', 'Container-Ship', 'Cruise-Ship', 
+         'Fish-Boat', 'Sail-Boat', 'Submarine', 'Tanker-Ship', 'Tugboat', 'War-Ship']
 
 # Define transformations
 train_transforms = transforms.Compose([
     transforms.ToPILImage(),
     transforms.Resize((640, 640)),
-    transforms.RandomHorizontalFlip(),
-    transforms.ColorJitter(brightness=0.2, contrast=0.2),
     transforms.ToTensor()
 ])
 
 # Paths
-model_file = r"model_v3/server/modelsBackup/yolo_custom_last.pth"
+model_file = r"model_v3/server/modelsBackup/yolo_custom_best.pth"
 test_img = r"ship.jpg"
 
 # Load and preprocess the image
 img = read_image(test_img)
-img = train_transforms(img).unsqueeze(0)
+pil_img = Image.open(test_img)
+original_width, original_height = pil_img.size
+img_tensor = train_transforms(img).unsqueeze(0)
 
 # Initialize model
 model = YOLO(num_classes=11)
@@ -31,13 +37,37 @@ model.eval()
 
 # Forward pass
 with torch.no_grad():
-    predictions = model(img)
-    p3_pred = predictions["p3"]
-    p7_pred = predictions["p5"]
-    p5_pred = predictions["p7"]
+    predictions = model(img_tensor)
+
+# Function to create heatmap from predictions
+def create_heatmap(pred_cls, pred_bbox, scale="p3"):
+    # Create a confidence heatmap by taking max class score per spatial location
+    B, C, H, W = pred_cls.shape
+    heatmap = torch.zeros((H, W))
+    
+    for i in range(H):
+        for j in range(W):
+            class_scores = torch.softmax(pred_cls[0, :, i, j], dim=0)
+            max_score = torch.max(class_scores)
+            heatmap[i, j] = max_score
+    
+    return heatmap.numpy()
+
+# Create heatmaps for each scale
+plt.figure(figsize=(15, 5))
+for idx, scale in enumerate(["p3", "p5", "p7"]):
+    heatmap = create_heatmap(predictions[scale]["cls"], predictions[scale]["bbox"], scale)
+    
+    plt.subplot(1, 3, idx+1)
+    plt.title(f"Heatmap for {scale}")
+    plt.imshow(heatmap, cmap='hot', interpolation='nearest')
+    plt.colorbar(label='Confidence')
+
+plt.tight_layout()
+plt.show()
 
 # Decode function with correct stride and clamping/sanity filtering
-def decode_dfl_predictions(pred_bbox, pred_cls, reg_max=16, conf_thresh=0.16, stride=8, img_size=640):
+def decode_dfl_predictions(pred_bbox, pred_cls, reg_max=16, conf_thresh=0.5, stride=8, img_size=640):
     B, _, H, W = pred_bbox.shape
     device = pred_bbox.device
 
@@ -67,6 +97,12 @@ def decode_dfl_predictions(pred_bbox, pred_cls, reg_max=16, conf_thresh=0.16, st
                 score, class_id = torch.max(class_scores, dim=0)
 
                 if score.item() > conf_thresh and w > 1 and h > 1:
+                    # Scale boxes back to original image dimensions
+                    x_min = x_min * original_width / img_size
+                    x_max = x_max * original_width / img_size
+                    y_min = y_min * original_height / img_size
+                    y_max = y_max * original_height / img_size
+                    
                     boxes.append([x_min, y_min, x_max, y_max])
                     scores.append(score.item())
                     class_ids.append(class_id.item())
@@ -97,9 +133,8 @@ else:
     final_boxes, final_scores, final_class_ids = [], [], []
 
 # Visualization
-img_np = img.squeeze().permute(1, 2, 0).numpy()
-fig, ax = plt.subplots(1)
-ax.imshow(img_np)
+fig, ax = plt.subplots(1, figsize=(10, 10))
+ax.imshow(pil_img)
 
 for box, score, class_id in zip(final_boxes, final_scores, final_class_ids):
     x_min, y_min, x_max, y_max = box
@@ -108,7 +143,9 @@ for box, score, class_id in zip(final_boxes, final_scores, final_class_ids):
         linewidth=1, edgecolor='r', facecolor='none'
     )
     ax.add_patch(rect)
-    ax.text(x_min, y_min - 5, f"Cls {class_id}: {score:.2f}", color='white',
+    ax.text(x_min, y_min - 5, f"{names[class_id]}: {score:.2f}", color='white',
             fontsize=8, bbox=dict(facecolor='red', alpha=0.5))
 
+plt.title(f"Detected {len(final_boxes)} objects")
+plt.axis('off')
 plt.show()

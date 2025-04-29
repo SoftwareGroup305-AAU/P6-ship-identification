@@ -74,7 +74,7 @@ def collate_fn(batch):
     return images, list(targets)
 
 training_data = YOLODataset(training_images_dir, training_labels_dir, train_transforms)
-dataloader = DataLoader(training_data, batch_size=16, shuffle=True, collate_fn=collate_fn) # trying smaller batch size, should be better and less resource intensive according to some paper
+dataloader = DataLoader(training_data, batch_size=8, shuffle=True, collate_fn=collate_fn) # trying smaller batch size, should be better and less resource intensive according to some paper
 
 num_classes = 11 # should be 2 when we get the proper data set
 model = YOLO(num_classes)
@@ -144,49 +144,54 @@ def ciou_loss(preds, ciou_targets):
     else:
         return torch.tensor(0.0, device=pred_boxes.device)
 
-def distributed_focal_loss(pred, target, reg_max=16):
-    """
-    pred: model output dict with 'p3' containing 'bbox' logits of shape [B, 4 * reg_max, H, W]
-    target: float tensor of shape [B, H, W, 4], continuous values in [0, reg_max)
-    """
-    bbox = pred['p3']['bbox']
-    
-    B, C, H, W = bbox.shape
-    assert C == 4 * reg_max, f"Expected {4 * reg_max} channels, got {C}"
-
-    # Reshape to proper format
-    bbox = bbox.view(B, 4, reg_max, H, W).permute(0, 3, 4, 1, 2).contiguous()
-
-    target = target.to(bbox.device).float()
-
+def distributed_focal_loss(pred, targets, reg_max=16):
     total_loss = 0.0
-    for i in range(4):  # For each of the 4 box coordinates
-        pred_dist = bbox[..., i, :]
-        t = target[..., i]            
+    num_scales = 0
 
-        tl = t.long()
-        tr = tl + 1
-        wl = tr - t
-        wr = 1 - wl
+    for scale_name, pred_dict in pred.items():
+        if scale_name not in targets:
+            continue  # Skip if no matching targets
 
-        tl = torch.clamp(tl, 0, reg_max - 1)
-        tr = torch.clamp(tr, 0, reg_max - 1)
+        bbox_pred = pred_dict['bbox']
+        bbox_target = targets[scale_name].to(bbox_pred.device).float()
 
-        loss_l = F.cross_entropy(pred_dist.view(-1, reg_max), tl.view(-1), reduction='none').view(t.shape)
-        loss_r = F.cross_entropy(pred_dist.view(-1, reg_max), tr.view(-1), reduction='none').view(t.shape)
-        dfl = loss_l * wl + loss_r * wr
+        B, C, H, W = bbox_pred.shape
+        assert C == 4 * reg_max, f"Expected {4 * reg_max} channels, got {C}"
 
-        total_loss += dfl.mean()
+        bbox_pred = bbox_pred.view(B, 4, reg_max, H, W).permute(0, 3, 4, 1, 2).contiguous()
 
-    return total_loss / 2  # average across 4 box coordinates
+        scale_loss = 0.0
+        for i in range(4):  # 4 box coordinates
+            pred_dist = bbox_pred[..., i, :]
+            t = bbox_target[..., i]
+
+            tl = t.long()
+            tr = tl + 1
+            wl = tr - t
+            wr = 1 - wl
+
+            tl = torch.clamp(tl, 0, reg_max - 1)
+            tr = torch.clamp(tr, 0, reg_max - 1)
+
+            loss_l = F.cross_entropy(pred_dist.view(-1, reg_max), tl.view(-1), reduction='none').view(t.shape)
+            loss_r = F.cross_entropy(pred_dist.view(-1, reg_max), tr.view(-1), reduction='none').view(t.shape)
+            dfl = loss_l * wl + loss_r * wr
+
+            scale_loss += dfl.mean()
+
+        total_loss += scale_loss / 2  # average over x, y, w, h
+        num_scales += 1
+
+    return total_loss / num_scales if num_scales > 0 else 0.0
+
                 
         
 
 print(f"Using { 1 if gpu_count >= 1 else 0} GPUs")
-optimizer = optim.Adam(model.parameters(), lr=0.0001)
+optimizer = optim.Adam(model.parameters(), lr=0.00001)
 criterion = distributed_focal_loss
 
-epochs = 50
+epochs = 10
 
 
 def train(model, dataloader, optimizer, criterion, device, epochs):
@@ -201,13 +206,18 @@ def train(model, dataloader, optimizer, criterion, device, epochs):
             # if (inc >= 150):
             #     break
             images = images.to(device)
-            dfl_targets, ciou_targets = build_dfl_targets(targets, feat_size=(80, 80), reg_max=16)
+            #dfl_targets, ciou_targets = build_dfl_targets(targets, feat_size=(80, 80), reg_max=16)
+            dfl_targets = {
+            'p3': build_dfl_targets(targets, feat_size=(80, 80), reg_max=16)[0],
+            'p5': build_dfl_targets(targets, feat_size=(40, 40), reg_max=16)[0],
+            'p7': build_dfl_targets(targets, feat_size=(20, 20), reg_max=16)[0],
+            }
 
             optimizer.zero_grad()
             output = model(images)
-            ciou_loss_v = ciou_loss(output, ciou_targets)
+            #ciou_loss_v = ciou_loss(output, ciou_targets)
             dfl_loss = criterion(output, dfl_targets)
-            loss = dfl_loss + ciou_loss_v
+            loss = dfl_loss #+ ciou_loss_v
             loss.backward()
             optimizer.step()
             loss_val = loss.item()

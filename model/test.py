@@ -11,9 +11,9 @@ train_transforms = transforms.Compose([
     transforms.ToTensor()
 ])
 
-model_file = r"C:\dev\python\P6-ship-identification\yolo_custom.pth"
+model_file = r"yolo_custom_best.pth"
 
-test_img = r"C:\dev\python\P6-ship-identification\yolo\data\test\images\002391_jpg.rf.cd9ad186807855e13ab1aa4f08e95110.jpg"
+test_img = r"yolo/data/test/images/images.jpeg"
 
 img = read_image(test_img)
 

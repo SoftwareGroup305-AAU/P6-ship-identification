@@ -62,12 +62,12 @@ def train(model, dataloader, optimizer, criterion, device, epochs):
             optimizer.zero_grad()
             output = model(images)
             loss = criterion(output, targets)
-            # loss.backward()
-            # optimizer.step()
-            # epoch_loss += loss.item()
-            # run_loss += loss.item()
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.item()
+            run_loss += loss.item()
             if idx % 10== 9: 
-                print(f"[{epoch+1}, {idx+1:5d}] loss: {run_loss / 10:.3f}")
+                print(f"[{epoch+1}, {idx+1:5d}] loss: {run_loss / 10:.4f}")
                 run_loss = 0
             # print(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss / len(dataloader)}")
             # print(f"Run {inc+1}/150, Run Loss: {run_loss}")
