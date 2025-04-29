@@ -86,7 +86,9 @@ class Detect(nn.Module):
             ConvBlock(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
         )
         # Bbox branch (coordinates + objectness ???)
-        self.bbox = nn.Conv2d(in_channels, 4 * reg_max, kernel_size=1, stride=1, padding=0)  
+        # Fix off by one (added variable "bins" as fix)
+        self.bins = reg_max + 1
+        self.bbox = nn.Conv2d(in_channels, 4 * self.bins, kernel_size=1, stride=1, padding=0)  
         # Class branch
         self.cls = nn.Conv2d(in_channels, num_classes, kernel_size=1, stride=1, padding=0)  
 
