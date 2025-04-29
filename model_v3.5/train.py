@@ -12,65 +12,56 @@ import torch.nn.functional as F
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"device: {device}")
 
-def build_dfl_targets(targets_list, feat_size=(80, 80), stride=8, reg_max=16):
-    """
-    targets_list: list of N tensors, each [[class, cx, cy, w, h], …] normalized [0,1]
-    feat_size: (H, W) grid dimensions for this scale
-    stride: how many image pixels each grid cell covers
-    reg_max: number of DFL bins
-    """
+def build_multi_scale_dfl_targets(targets_list, feat_sizes={'p3': (320, 320), 'p5': (160, 160), 'p7': (40, 40)}, reg_max=16):
     B = len(targets_list)
-    H, W = feat_size
-    dfl_targets   = torch.zeros((B, H, W, 4), dtype=torch.float32)
-    ciou_targets  = torch.zeros((B, H, W, 4), dtype=torch.float32)
+    dfl_targets = {}
 
-    img_w, img_h = W * stride, H * stride  # total image size at this scale
+    for scale_name, (H, W) in feat_sizes.items():
+        scale_target = torch.zeros((B, H, W, 4), dtype=torch.float32)
 
-    for b, targets in enumerate(targets_list):
-        for t in targets:
-            if len(t) != 5: 
-                continue
-            _, cx, cy, w_n, h_n = t
+        for b, targets in enumerate(targets_list):
+            for t in targets:
+                if len(t) != 5:
+                    continue
+                _, cx, cy, w, h = t  # normalized
 
-            # 1) Convert normalized to pixel coords
-            px_cx = cx * img_w
-            px_cy = cy * img_h
-            px_w  = w_n * img_w
-            px_h  = h_n * img_h
+                gx = cx * W
+                gy = cy * H
+                gw = w * W
+                gh = h * H
 
-            # 2) Box corners in pixels
-            x1 = px_cx - px_w/2
-            y1 = px_cy - px_h/2
-            x2 = px_cx + px_w/2
-            y2 = px_cy + px_h/2
+                x1 = gx - gw / 2
+                y1 = gy - gh / 2
+                x2 = gx + gw / 2
+                y2 = gy + gh / 2
 
-            # 3) Convert to grid‐cell coords by dividing by stride
-            gx = px_cx / stride
-            gy = px_cy / stride
-            gw = px_w  / stride
-            gh = px_h  / stride
+                gi = int(gx)
+                gj = int(gy)
 
-            gi, gj = int(gx), int(gy)
-            if not (0 <= gi < W and 0 <= gj < H):
-                continue
+                if 0 <= gi < W and 0 <= gj < H:
+                    eps = 1e-4
+                    l = gx - x1
+                    t_ = gy - y1
+                    r = x2 - gx
+                    b_ = y2 - gy
 
-            # 4) Distances in cell‐units
-            l = (gx - (x1/stride))
-            t_ = (gy - (y1/stride))
-            r = ((x2/stride) - gx)
-            b_ = ((y2/stride) - gy)
+                    l = l / (W / (reg_max - 1))
+                    t_ = t_ / (H / (reg_max - 1))
+                    r = r / (W / (reg_max - 1))
+                    b_ = b_ / (H / (reg_max - 1))
 
-            # 5) Clamp into [0, reg_max)
-            eps = 1e-4
-            l  = min(max(l,  0), reg_max - eps)
-            t_ = min(max(t_, 0), reg_max - eps)
-            r  = min(max(r,  0), reg_max - eps)
-            b_ = min(max(b_, 0), reg_max - eps)
+                    scale_target[b, gj, gi] = torch.tensor([
+                        min(max(l, 0), reg_max - eps),
+                        min(max(t_, 0), reg_max - eps),
+                        min(max(r, 0), reg_max - eps),
+                        min(max(b_, 0), reg_max - eps)
+                    ], dtype=torch.float32)
 
-            dfl_targets[b, gj, gi]  = torch.tensor([l, t_, r, b_], dtype=torch.float32)
-            ciou_targets[b, gj, gi] = torch.tensor([x1, y1, x2, y2], dtype=torch.float32)
+        dfl_targets[scale_name] = scale_target
 
-    return dfl_targets, ciou_targets
+    return dfl_targets
+
+
 
 
 
@@ -94,13 +85,7 @@ training_data = YOLODataset(training_images_dir, training_labels_dir, train_tran
 dataloader = DataLoader(training_data, batch_size=8, shuffle=True, collate_fn=collate_fn) # trying smaller batch size, should be better and less resource intensive according to some paper
 
 num_classes = 11 # should be 2 when we get the proper data set
-model = YOLO(
-    num_classes=num_classes,
-    depth_multiple=0.33,
-    width_multiple=0.25,
-    max_channels=1024
-)
-
+model = YOLO(num_classes)
 model.to(device)
 gpu_count = torch.cuda.device_count()
 # if gpu_count > 1:
@@ -171,43 +156,52 @@ def distributed_focal_loss(pred, targets, reg_max=16):
     total_loss = 0.0
     num_scales = 0
 
-    for scale_name, pred_dict in pred.items():
-        if scale_name not in targets:
-            continue  # Skip if no matching targets
+    for scale_name in ['p3', 'p5', 'p7']:
+        if scale_name not in pred or scale_name not in targets:
+            continue
 
+        pred_dict = pred[scale_name]
         bbox_pred = pred_dict['bbox']
         bbox_target = targets[scale_name].to(bbox_pred.device).float()
 
         B, C, H, W = bbox_pred.shape
         assert C == 4 * reg_max, f"Expected {4 * reg_max} channels, got {C}"
 
-        bbox_pred = bbox_pred.view(B, 4, reg_max, H, W).permute(0, 3, 4, 1, 2).contiguous()
+        bbox_pred = bbox_pred.view(B, 4, reg_max, H, W)
+        bbox_pred = bbox_pred.permute(0, 3, 4, 1, 2).contiguous()  # (B, H, W, 4, reg_max)
+        bbox_target = bbox_target  # (B, H, W, 4)
+
+        pred_dist = bbox_pred.reshape(-1, 4, reg_max)  # (B*H*W, 4, reg_max)
+        t = bbox_target.reshape(-1, 4)                 # (B*H*W, 4)
 
         scale_loss = 0.0
-        for i in range(4):  # 4 box coordinates
-            pred_dist = bbox_pred[..., i, :]
-            t = bbox_target[..., i]
 
-            tl = t.long()
-            tr = tl + 1
-            wl = tr - t
-            wr = 1 - wl
+        for i in range(4):
+            pred_i = pred_dist[:, i, :]  # (B*H*W, reg_max)
+            t_i = t[:, i]                # (B*H*W,)
 
-            tl = torch.clamp(tl, 0, reg_max - 1)
-            tr = torch.clamp(tr, 0, reg_max - 1)
+            t_i = torch.clamp(t_i, 0, reg_max - 1 - 1e-6)
 
-            loss_l = F.cross_entropy(pred_dist.view(-1, reg_max), tl.view(-1), reduction='none').view(t.shape)
-            loss_r = F.cross_entropy(pred_dist.view(-1, reg_max), tr.view(-1), reduction='none').view(t.shape)
-            dfl = loss_l * wl + loss_r * wr
+            left_bin = t_i.floor().long()
+            right_bin = left_bin + 1
 
-            scale_loss += dfl.mean()
+            weight_right = t_i - left_bin.float()
+            weight_left = 1.0 - weight_right
 
-        total_loss += scale_loss / 2  # average over x, y, w, h
+            right_bin = torch.clamp(right_bin, 0, reg_max - 1)
+            left_bin = torch.clamp(left_bin, 0, reg_max - 1)
+
+            loss_left = F.cross_entropy(pred_i, left_bin, reduction='none')
+            loss_right = F.cross_entropy(pred_i, right_bin, reduction='none')
+
+            loss = weight_left * loss_left + weight_right * loss_right
+
+            scale_loss += loss.mean()
+
+        total_loss += scale_loss / 2  # average ltrb
         num_scales += 1
 
     return total_loss / num_scales if num_scales > 0 else 0.0
-
-                
         
 
 print(f"Using { 1 if gpu_count >= 1 else 0} GPUs")
@@ -230,16 +224,7 @@ def train(model, dataloader, optimizer, criterion, device, epochs):
             #     break
             images = images.to(device)
             #dfl_targets, ciou_targets = build_dfl_targets(targets, feat_size=(80, 80), reg_max=16)
-            dfl_p3, _ = build_dfl_targets(targets, feat_size=(80,80), stride=8,  reg_max=16)
-            dfl_p5, _ = build_dfl_targets(targets, feat_size=(40,40), stride=16, reg_max=16)
-            dfl_p7, _ = build_dfl_targets(targets, feat_size=(20,20), stride=32, reg_max=16)
-
-            dfl_targets = {
-                'p3': dfl_p3,
-                'p5': dfl_p5,
-                'p7': dfl_p7,
-            }
-
+            dfl_targets = build_multi_scale_dfl_targets(targets, reg_max=16)
 
             optimizer.zero_grad()
             output = model(images)
