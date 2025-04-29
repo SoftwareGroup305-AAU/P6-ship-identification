@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from utilities import CompositeLoss
+from utilities import generate_targets
 from dataset import YOLODataset
-from core import YOLO
+from core import YOLOv1
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"device: {device}")
@@ -30,7 +30,7 @@ training_data = YOLODataset(training_images_dir, training_labels_dir, train_tran
 dataloader = DataLoader(training_data, batch_size=16, shuffle=True, collate_fn=collate_fn) # trying smaller batch size, should be better and less resource intensive according to some paper
 
 num_classes = 11 # should be 2 when we get the proper data set
-model = YOLO(num_classes)
+model = YOLOv1(grid_size=7, number_of_bboxes=2, number_of_classes=11)
 model.to(device)
 gpu_count = torch.cuda.device_count()
 # if gpu_count > 1:
@@ -40,7 +40,7 @@ gpu_count = torch.cuda.device_count()
 
 print(f"Using { 1 if gpu_count >= 1 else 0} GPUs")
 optimizer = optim.Adam(model.parameters(), lr=0.001)
-criterion = CompositeLoss(num_classes)
+criterion = None
 
 epochs = 50
 
@@ -53,14 +53,15 @@ def train(model, dataloader, optimizer, criterion, device, epochs):
     for epoch in range(epochs):
         epoch_loss = 0
         for idx, data in enumerate(dataloader):
-            images, targets = data
+            images, raw_targets = data
             # if (inc >= 150):
             #     break
             images = images.to(device)
-            targets = [target.to(device) for target in targets]
+            raw_targets = [target.to(device) for target in raw_targets]
             optimizer.zero_grad()
             output = model(images)
-            loss = criterion(class_predictions, objectness_predictions, localization_predictions, targets, device)
+            targets = generate_targets(output, raw_targets, number_of_bboxes=2)
+            loss = criterion(class_predictions, objectness_predictions, localization_predictions, raw_targets, device)
             loss.backward()
             optimizer.step()
             epoch_loss += loss.item()
