@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 6
+names: ['container', 'cruise', 'fish-b', 'sail boat', 'submarine', 'warship']
+
+roboflow:
+  workspace: btl-se8qf
+  project: shipdetection-xmphm
+  version: 3
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/btl-se8qf/shipdetection-xmphm/dataset/3

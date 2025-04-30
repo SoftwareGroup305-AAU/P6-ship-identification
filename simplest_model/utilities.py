@@ -79,7 +79,7 @@ def generate_targets(raw_preds: torch.Tensor, raw_targets: list, number_of_bboxe
                 area1 = (x1_max - x1_min) * (y1_max - y1_min)
                 area2 = (x2_max - x2_min) * (y2_max - y2_min)
                 union = area1 + area2 - inter_area
-                if union == 0:
+                if union.item() == 0:
                     return 0.0
                 return inter_area / union
 
@@ -152,7 +152,7 @@ def yolo_loss(preds: torch.Tensor, targets: torch.Tensor, number_of_bboxes: int,
     
     # --- 2. Coordinate loss (sqrt(w), sqrt(h)) ---
     wh_pred = bbox_preds[..., 2:4].clamp(min=1e-6).sqrt()  # prevent sqrt(negative)
-    wh_target = bbox_targets[..., 2:4].sqrt()
+    wh_target = bbox_targets[..., 2:4].clamp(min=1e-6).sqrt()
     wh_loss = lambda_coord * torch.sum(
         obj_mask.unsqueeze(-1) * (wh_pred - wh_target).pow(2))
     

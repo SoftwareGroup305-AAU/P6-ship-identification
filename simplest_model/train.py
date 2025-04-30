@@ -10,22 +10,24 @@ from core import YOLOv1
 # Configuration
 class Config:
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-    TRAIN_IMAGES_DIR = "yolo/data/train/images/"
-    TRAIN_LABELS_DIR = "yolo/data/train/labels/"
+    TRAIN_IMAGES_DIR = "data/train/images"
+    TRAIN_LABELS_DIR = "data/train/labels"
     BATCH_SIZE = 16
-    NUM_CLASSES = 11  # Should be 2 for final dataset
+    NUM_CLASSES = 6
     NUM_BBOXES = 2
-    LEARNING_RATE = 0.0001
+    INITIAL_LEARNING_RATE = 0.0001
     EPOCHS = 50
-    SAVE_PATH_BEST = "yolo_custom_best.pth"
-    SAVE_PATH_LAST = "yolo_custom_last.pth"
-    SAVE_PATH_FINAL = "yolo_custom.pth"
+    SAVE_PATH_BEST = "simple_yolo_custom_best.pth"
+    SAVE_PATH_LAST = "simple_yolo_custom_last.pth"
+    SAVE_PATH_FINAL = "simple_yolo_custom.pth"
 
 def create_dataloader():
     """Create and return the training DataLoader"""
     transform = transforms.Compose([
         transforms.ToPILImage(),
         transforms.Resize((448, 448)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2),
         transforms.ToTensor()
     ])
 
@@ -56,7 +58,7 @@ def setup_model():
     # if torch.cuda.device_count() > 1:
     #     model = nn.DataParallel(model)
     
-    optimizer = optim.Adam(model.parameters(), lr=Config.LEARNING_RATE)
+    optimizer = optim.Adam(model.parameters(), lr=Config.INITIAL_LEARNING_RATE)
     return model, optimizer
 
 def train(model, dataloader, optimizer, device):
@@ -67,7 +69,22 @@ def train(model, dataloader, optimizer, device):
     for epoch in range(Config.EPOCHS):
         running_loss = 0.0
         epoch_loss = 0.0
+        lr = Config.INITIAL_LEARNING_RATE
         
+        if epoch == 1:
+            lr = lr
+        elif epoch > 1 and epoch <= 5:
+            lr += 0.0002
+        elif epoch > 5 and epoch <= 40:
+            lr = 0.001
+        elif epoch > 40 and epoch <= 80:
+            lr = 0.0001
+        else:
+            lr = 0.00001
+
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+
         for batch_idx, (images, raw_targets) in enumerate(dataloader, 1):
             # Move data to device
             images = images.to(device)
@@ -78,11 +95,21 @@ def train(model, dataloader, optimizer, device):
             outputs = model(images)
             targets = generate_targets(outputs, raw_targets, Config.NUM_BBOXES)
             loss = yolo_loss(outputs, targets, Config.NUM_BBOXES)
+
+            if loss.item() > 30:
+                print(f"Spike detected: {loss.item()}")
+                print(f"Targets: {raw_targets}")
+                print(f"Predictions: {outputs}")
+
             
             # Backward pass
-            loss.backward()
-            optimizer.step()
-            
+            if torch.isfinite(loss):
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5)
+                optimizer.step()
+            else:
+                print("nan detected, loss skipped:", loss.item())
+
             # Logging
             running_loss += loss.item()
             epoch_loss += loss.item()
@@ -97,7 +124,8 @@ def train(model, dataloader, optimizer, device):
         # Epoch summary
         epoch_avg_loss = epoch_loss / len(dataloader)
         print(f"Epoch [{epoch+1}/{Config.EPOCHS}] "
-              f"Average Loss: {epoch_avg_loss:.3f}")
+              f"Average Loss: {epoch_avg_loss:.3f} "
+              f"Learning Rate: {lr}")
         
         # Save checkpoints
         state_dict = model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict()
