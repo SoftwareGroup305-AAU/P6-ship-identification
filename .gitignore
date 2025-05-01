@@ -7,6 +7,9 @@ data/**/images/
 data/**/labels/
 simple_yolo_custom_best.pth
 simple_yolo_custom_last.pth
+reduced_yolo_custom_best.pth
+reduced_yolo_custom_last.pth
 simplest_model/__pycache__/core.cpython-312.pyc
 simplest_model/__pycache__/dataset.cpython-312.pyc
 simplest_model/__pycache__/utilities.cpython-312.pyc
+simplest_model/__pycache__/reduced_core.cpython-312.pyc

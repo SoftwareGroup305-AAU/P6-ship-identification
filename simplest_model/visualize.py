@@ -3,9 +3,11 @@ from torchvision import transforms
 from torchvision.io import read_image
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from torchsummary import summary
 import numpy as np
 from PIL import Image
 from core import YOLOv1
+from reduced_core import YOLOv1Reduced
 
 # names = ['Boat', 'Cargo-Ship', 'Carrier-Ship', 'Container-Ship', 'Cruise-Ship', 'Fish-Boat', 'Sail-Boat', 'Submarine', 'Tanker-Ship', 'Tugboat', 'War-Ship']
 
@@ -17,10 +19,12 @@ def visualize_predictions(model_path, image_path, conf_threshold=0.1, num_bboxes
     print(f"Using device: {device}")
     
     # Load model
-    model = YOLOv1(number_of_bboxes=2, number_of_classes=num_classes)
+    model = YOLOv1Reduced(number_of_bboxes=2, number_of_classes=num_classes)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.to(device)
     model.eval()
+    summary(model, input_size=(3, 448, 448)) 
+
     
     # Image transformation
     transform = transforms.Compose([
@@ -61,15 +65,18 @@ def visualize_predictions(model_path, image_path, conf_threshold=0.1, num_bboxes
             
             for b in range(num_bboxes):
                 offset = b * 5
-                obj_score = cell[offset + 4].item()
+                obj_score = torch.sigmoid(cell[offset + 4]).item()
                 score = obj_score * class_conf
                 if score < conf_threshold:
                     continue
 
-                cx = (cell[offset + 0].item() + j) / S
-                cy = (cell[offset + 1].item() + i) / S
-                w = cell[offset + 2].item()
-                h = cell[offset + 3].item()
+                x = torch.sigmoid(cell[offset + 0]).item()
+                y = torch.sigmoid(cell[offset + 1]).item()
+                w = torch.sigmoid(cell[offset + 2]).item()
+                h = torch.sigmoid(cell[offset + 3]).item()
+
+                cx = (x + j) / S
+                cy = (y + i) / S
 
                 x1 = max(0, (cx - w / 2) * original_width)
                 y1 = max(0, (cy - h / 2) * original_height)
@@ -79,6 +86,8 @@ def visualize_predictions(model_path, image_path, conf_threshold=0.1, num_bboxes
                 boxes.append([x1, y1, x2, y2])
                 classes.append(class_id)
                 scores.append(score)
+
+                print(preds[0, 0, :10])
 
                 width, height = x2 - x1, y2 - y1
                 rect = patches.Rectangle((x1, y1), width, height,
@@ -94,14 +103,14 @@ def visualize_predictions(model_path, image_path, conf_threshold=0.1, num_bboxes
 
 if __name__ == "__main__":
     # Placeholders for model and image paths
-    MODEL_PATH = "simple_yolo_custom_last.pth"
-    IMAGE_PATH = "bottom_trawler.jpg"
+    MODEL_PATH = "reduced_yolo_custom_last.pth"
+    IMAGE_PATH = "ship.jpg"
     
     # Lowered confidence threshold to see more detections
     visualize_predictions(
         model_path=MODEL_PATH, 
         image_path=IMAGE_PATH, 
-        conf_threshold=0.05,  # Reduced from 0.4 to 0.1
+        conf_threshold=0.1,  # Reduced from 0.4 to 0.1
         num_bboxes=2,
         num_classes=6,
         debug=True  # Enable debug information

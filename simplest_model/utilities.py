@@ -50,7 +50,10 @@ def generate_targets(raw_preds: torch.Tensor, raw_targets: list, number_of_bboxe
             # For each bbox predictor, get the predicted box at this cell
             pred_boxes = []
             for b in range(number_of_bboxes):
-                pred = raw_preds[batch_idx, grid_y, grid_x, b*5:b*5+4]
+                pred = torch.sigmoid(raw_preds[batch_idx, grid_y, grid_x, b*5:b*5+4])
+                # pred = raw_preds[batch_idx, grid_y, grid_x, b*5:b*5+4]
+                # pred[:2] = torch.sigmoid(pred[:2])  # x, y
+                # pred[2:4] = torch.clamp(pred[2:4], min=1e-3).sqrt()  # w, h like loss
                 pred_boxes.append(pred)
             gt_box = torch.tensor([x_offset, y_offset, w, h], device=raw_preds.device)
 
@@ -96,30 +99,8 @@ def generate_targets(raw_preds: torch.Tensor, raw_targets: list, number_of_bboxe
             targets[batch_idx, grid_y, grid_x, number_of_bboxes*5+int(class_idx)] = 1
     return targets
 
-# def yolo_loss(preds: torch.Tensor, targets: torch.Tensor, number_of_bboxes: int, lambda_coord = 5, lambda_noobj = 0.5):
-
-#     bbox_preds = preds[..., :number_of_bboxes*5]
-#     bbox_targets = targets[..., :number_of_bboxes*5] 
-
-#     cls_preds = preds[...,number_of_bboxes*5:]
-#     cls_targets = targets[...,number_of_bboxes*5:]
-
-#     obj_mask = targets[..., 4] == 1
-#     noobj_mask = targets[..., 4] == 0
-
-#     bbox_loss = torch.sum((bbox_targets[obj_mask]-bbox_preds[obj_mask])**2)
-
-#     cls_obj_loss = torch.sum((cls_targets[obj_mask]-cls_preds[obj_mask])**2)
-
-    
-
-
-
-#     print("allo")
-
-
 def yolo_loss(preds: torch.Tensor, targets: torch.Tensor, number_of_bboxes: int, 
-              lambda_coord=5, lambda_noobj=0.5):
+              lambda_coord=7, lambda_noobj=0.05):
     """
     Computes YOLOv1 loss as per the original paper's equation.
     
@@ -145,19 +126,19 @@ def yolo_loss(preds: torch.Tensor, targets: torch.Tensor, number_of_bboxes: int,
     noobj_mask = bbox_targets[..., 4] == 0
     
     # --- 1. Coordinate loss (x,y) ---
-    xy_pred = bbox_preds[..., :2]  # (batch, S, S, B, 2)
+    xy_pred = torch.sigmoid(bbox_preds[..., :2])  # (batch, S, S, B, 2)
     xy_target = bbox_targets[..., :2]
     xy_loss = lambda_coord * torch.sum(
         obj_mask.unsqueeze(-1) * (xy_pred - xy_target).pow(2))
     
     # --- 2. Coordinate loss (sqrt(w), sqrt(h)) ---
-    wh_pred = bbox_preds[..., 2:4].clamp(min=1e-6).sqrt()  # prevent sqrt(negative)
-    wh_target = bbox_targets[..., 2:4].clamp(min=1e-6).sqrt()
+    wh_pred = torch.sqrt(torch.sigmoid(torch.clamp(bbox_preds[..., 2:4], min=1e-3)))
+    wh_target = torch.sqrt(torch.clamp(bbox_targets[..., 2:4], min=1e-3))
     wh_loss = lambda_coord * torch.sum(
         obj_mask.unsqueeze(-1) * (wh_pred - wh_target).pow(2))
     
     # --- 3. Object confidence loss ---
-    conf_pred = bbox_preds[..., 4]  # (batch, S, S, B)
+    conf_pred = torch.sigmoid(bbox_preds[..., 4])  # (batch, S, S, B)
     conf_target = bbox_targets[..., 4]
     obj_conf_loss = torch.sum(obj_mask * (conf_pred - conf_target).pow(2))
     

@@ -6,6 +6,7 @@ from torchvision import transforms
 from utilities import generate_targets, yolo_loss
 from dataset import YOLODataset
 from core import YOLOv1
+from reduced_core import YOLOv1Reduced
 
 # Configuration
 class Config:
@@ -15,11 +16,11 @@ class Config:
     BATCH_SIZE = 16
     NUM_CLASSES = 6
     NUM_BBOXES = 2
-    INITIAL_LEARNING_RATE = 0.0001
+    INITIAL_LEARNING_RATE = 0.00001
     EPOCHS = 50
-    SAVE_PATH_BEST = "simple_yolo_custom_best.pth"
-    SAVE_PATH_LAST = "simple_yolo_custom_last.pth"
-    SAVE_PATH_FINAL = "simple_yolo_custom.pth"
+    SAVE_PATH_BEST = "reduced_yolo_custom_best.pth"
+    SAVE_PATH_LAST = "reduced_yolo_custom_last.pth"
+    SAVE_PATH_FINAL = "reduced_yolo_custom.pth"
 
 def create_dataloader():
     """Create and return the training DataLoader"""
@@ -49,7 +50,7 @@ def create_dataloader():
 
 def setup_model():
     """Initialize model and optimizer"""
-    model = YOLOv1(
+    model = YOLOv1Reduced(
         number_of_bboxes=Config.NUM_BBOXES,
         number_of_classes=Config.NUM_CLASSES
     ).to(Config.DEVICE)
@@ -74,18 +75,19 @@ def train(model, dataloader, optimizer, device):
         if epoch == 1:
             lr = lr
         elif epoch > 1 and epoch <= 5:
-            lr += 0.0002
+            lr += 0.00002
         elif epoch > 5 and epoch <= 40:
-            lr = 0.001
-        elif epoch > 40 and epoch <= 80:
             lr = 0.0001
-        else:
+        elif epoch > 40 and epoch <= 80:
             lr = 0.00001
+        else:
+            lr = 0.000001
 
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
         for batch_idx, (images, raw_targets) in enumerate(dataloader, 1):
+            print("Batch: ", batch_idx)
             # Move data to device
             images = images.to(device)
             raw_targets = [target.to(device) for target in raw_targets]
