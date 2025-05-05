@@ -8,15 +8,30 @@ from torch.utils.data import DataLoader
 from dataset import YOLOPascalVoc
 from loss import sum_square_error_loss, SumSquaredErrorLoss
 from models import YOLOv1
+import torch.optim.lr_scheduler as lrs
 
 # Training configuration
 BATCH_SIZE = 64
-EPOCHS = 135
-WARMUP_EPOCHS = 0
+EPOCHS = 300
+WARMUP_EPOCHS = 5
+VAL_INTERVAL = 10
 LEARNING_RATE = 1e-5
-NUM_WORKERS = 8
+NUM_WORKERS = 0
 GRID_SIZE = 7
 NUM_PREDICTORS = 2
+CHECKPOINT_INTERVAL = 40
+
+def lr_lambda(epoch):
+    if epoch < WARMUP_EPOCHS:
+        return (epoch + 1) / WARMUP_EPOCHS
+    elif epoch < 100:
+        return 1.0
+    elif epoch < 150:
+        return 0.3
+    elif epoch < 200:
+        return 0.1
+    else:
+        return 0.03
 
 if __name__ == '__main__':  # Prevent recursive subprocess creation
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -43,6 +58,9 @@ if __name__ == '__main__':  # Prevent recursive subprocess creation
         model.parameters(),
         lr=LEARNING_RATE
     )
+
+    scheduler = lrs.LambdaLR(optimizer, lr_lambda)
+
 
     train_loader = DataLoader(
         train_set,
@@ -91,11 +109,11 @@ if __name__ == '__main__':  # Prevent recursive subprocess creation
             train_loss += loss.item() / len(train_loader)
             train_bar.set_postfix(loss=loss.item())
             del data, labels
-
         train_losses = np.append(train_losses, [[epoch], [train_loss]], axis=1)
         log_msg = f"Epoch {epoch}: Train Loss = {train_loss:.4f}"
-
-        if epoch % 4 == 0:
+        log_msg += f" | LR = {scheduler.get_last_lr()[0]:.6f}"
+        scheduler.step()
+        if epoch % VAL_INTERVAL == 0:
             model.eval()
             with torch.no_grad():
                 test_loss = 0
@@ -115,8 +133,9 @@ if __name__ == '__main__':  # Prevent recursive subprocess creation
         log_to_file(log_msg)
 
         # Save checkpoint
-        if (epoch + 1) % 20 == 0:
-            torch.save(model.state_dict(), os.path.join(weight_dir, f'epoch_{epoch+1}.pth'))
+        if (epoch + 1) % CHECKPOINT_INTERVAL == 0:
+            core_model = model.module if isinstance(model, torch.nn.DataParallel) else model
+            torch.save(core_model.state_dict(), os.path.join(weight_dir, f'epoch_{epoch+1}.pth'))
 
     save_metrics()
     torch.save(model.state_dict(), os.path.join(weight_dir, 'final.pth'))
