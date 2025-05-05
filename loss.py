@@ -159,7 +159,7 @@ class SumSquaredErrorLoss(nn.Module):
 
     def forward(self, p, a):
 
-        batch_size = p.shape[0]
+        batch_size =p.shape[0]
         # Calculate IOU of each predicted bbox against the ground truth bbox
         iou = get_iou(p, a, self.B, self.C)                     # (batch, S, S, B, B)
         max_iou = torch.max(iou, dim=-1)[0]     # (batch, S, S, B)
