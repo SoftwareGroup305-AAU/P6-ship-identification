@@ -56,8 +56,8 @@ def setup_model():
     ).to(Config.DEVICE)
     
     # Multi-GPU support (commented out as per your note)
-    # if torch.cuda.device_count() > 1:
-    #     model = nn.DataParallel(model)
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model, device_ids=[id for id in range(torch.cuda.device_count())], output_device=0)
     
     optimizer = optim.Adam(model.parameters(), lr=Config.INITIAL_LEARNING_RATE)
     return model, optimizer
