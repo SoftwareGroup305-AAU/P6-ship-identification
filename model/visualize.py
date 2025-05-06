@@ -7,16 +7,18 @@ import numpy as np
 from PIL import Image
 from core import YOLO
 
-names = ['Boat', 'Cargo-Ship', 'Carrier-Ship', 'Container-Ship', 'Cruise-Ship', 'Fish-Boat', 'Sail-Boat', 'Submarine', 'Tanker-Ship', 'Tugboat', 'War-Ship']
+# names = ['Boat', 'Cargo-Ship', 'Carrier-Ship', 'Container-Ship', 'Cruise-Ship', 'Fish-Boat', 'Sail-Boat', 'Submarine', 'Tanker-Ship', 'Tugboat', 'War-Ship']
 
-def visualize_predictions(model_path, image_path, conf_threshold=0.1, num_classes=11, debug=True):
-    # Set device
+names = ['container', 'cruise', 'fish-b', 'sail boat', 'submarine', 'warship']
+
+def visualize_predictions(model_path, image_path, conf_threshold=0.1, num_classes=6, debug=True):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
     # Load model
     model = YOLO(num_classes=num_classes)
-    model.load_state_dict(torch.load(model_path, map_location=device))
+    checkpoint = torch.load(model_path, map_location=device)
+    model.load_state_dict(checkpoint['model_state_dict'])
     model.to(device)
     model.eval()
     
@@ -122,14 +124,14 @@ def visualize_predictions(model_path, image_path, conf_threshold=0.1, num_classe
 
 if __name__ == "__main__":
     # Placeholders for model and image paths
-    MODEL_PATH = "yolo_custom_last.pth"
-    IMAGE_PATH = "bottom_trawler.jpg"
+    MODEL_PATH = "initial_yolo_last.pth"
+    IMAGE_PATH = "warship.jpg"
     
     # Lowered confidence threshold to see more detections
     visualize_predictions(
         model_path=MODEL_PATH, 
         image_path=IMAGE_PATH, 
-        conf_threshold=0.01,  # Reduced from 0.4 to 0.1
-        num_classes=11,
-        debug=True  # Enable debug information
+        conf_threshold=0.999,
+        num_classes=6,
+        debug=True 
     )
