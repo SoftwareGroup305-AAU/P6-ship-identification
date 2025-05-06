@@ -12,24 +12,14 @@ import torch.optim.lr_scheduler as lrs
 
 # Training configuration
 BATCH_SIZE = 64
-EPOCHS = 135
-WARMUP_EPOCHS = 10
+EPOCHS = 300
+WARMUP_EPOCHS = 5
 VAL_INTERVAL = 10
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-5
 NUM_WORKERS = 0
 GRID_SIZE = 7
 NUM_PREDICTORS = 2
 CHECKPOINT_INTERVAL = 40
-
-def scheduler_lambda(epoch):
-    if epoch < WARMUP_EPOCHS:
-        return (epoch + 1) / WARMUP_EPOCHS
-    elif epoch < WARMUP_EPOCHS + 75:
-        return 1
-    elif epoch < WARMUP_EPOCHS + 105:
-        return 0.1
-    else:
-        return 0.01
 
 def lr_lambda(epoch):
     if epoch < WARMUP_EPOCHS:
@@ -69,14 +59,13 @@ if __name__ == '__main__':  # Prevent recursive subprocess creation
         lr=LEARNING_RATE
     )
 
-    scheduler = lrs.LambdaLR(optimizer, scheduler_lambda)
+    scheduler = lrs.LambdaLR(optimizer, lr_lambda)
 
 
     train_loader = DataLoader(
         train_set,
         batch_size=BATCH_SIZE,
-        shuffle=True,
-        drop_last=True
+        shuffle=True
     )
     test_loader = DataLoader(
         test_set,
