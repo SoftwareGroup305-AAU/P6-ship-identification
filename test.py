@@ -20,8 +20,8 @@ def remove_data_parallel(old_state_dict):
     
     return new_state_dict
 
-MODEL_DIR = 'weights/epoch_240_c.pth'
-IMG_DIR = r"images/joe.jpg"
+MODEL_DIR = 'weights/epoch_280.pth'
+IMG_DIR = r"images/ship.jpg"
 CLASS_FILE = "data/classes.json"
 
 def plot_test_images():
@@ -38,7 +38,7 @@ def plot_test_images():
         T.Resize((448, 448))
     ])
 
-    dataset = YOLOPascalVoc('data', "2007", "test", grid_size=7, num_predictors=2, transform=transform, normalize=True, augment=False)
+    dataset = YOLOPascalVoc('data', "2007", "val", grid_size=7, num_predictors=2, transform=transform, normalize=True, augment=False)
     loader = DataLoader(dataset, batch_size=1, shuffle=True)
 
     img = Image.open(IMG_DIR).convert("RGB")
@@ -58,16 +58,18 @@ def plot_test_images():
         plot_ground_truths(img, prediction, classes, max_overlap=0.5, min_confidence=0.1)
 
         for image, labels, original in tqdm(loader):
-            predictions = model.forward(image)
-            predictions = predictions.squeeze(0)
-            image = image.squeeze(0)
-            plot_ground_truths(
-                    image,
-                    predictions,
-                    classes,
-                    max_overlap=0.5, 
-                    min_confidence=0.1
-                )
+            predictions = model(image)
+            # predictions = predictions.squeeze(0)
+            # original = original.squeeze(0)
+            # plot_ground_truths(
+            #         image,
+            #         predictions,
+            #         classes,
+            #         max_overlap=0.5, 
+            #         min_confidence=0.1
+            #     )
+            for i in range(image.size(dim=0)):
+                utils.plot_boxes(original[i, :, :, :], predictions[i, :, :, :], classes, min_confidence=0.1)
 
 
 if __name__ == '__main__':

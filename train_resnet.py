@@ -13,7 +13,7 @@ import torch.optim.lr_scheduler as lrs
 # Training configuration
 BATCH_SIZE = 64
 EPOCHS = 135
-WARMUP_EPOCHS = 10
+WARMUP_EPOCHS = 0
 VAL_INTERVAL = 10
 LEARNING_RATE = 1e-4
 NUM_WORKERS = 0
@@ -22,9 +22,7 @@ NUM_PREDICTORS = 2
 CHECKPOINT_INTERVAL = 40
 
 def scheduler_lambda(epoch):
-    if epoch < WARMUP_EPOCHS:
-        return (epoch + 1) / WARMUP_EPOCHS
-    elif epoch < WARMUP_EPOCHS + 75:
+    if epoch < WARMUP_EPOCHS + 75:
         return 1
     elif epoch < WARMUP_EPOCHS + 105:
         return 0.1
@@ -43,7 +41,7 @@ def lr_lambda(epoch):
     else:
         return 0.03
 
-if __name__ == '__main__':  # Prevent recursive subprocess creation
+if __name__ == '__main__': 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.autograd.set_detect_anomaly(True)
 
@@ -84,16 +82,16 @@ if __name__ == '__main__':  # Prevent recursive subprocess creation
     )
 
     # Logging and checkpoint paths
-    log_file_path = "log.txt"
-    weight_dir = "weights"
+    log_file_path = "log_resnet.txt"
+    weight_dir = "weights_resnet"
     os.makedirs(weight_dir, exist_ok=True)
 
     train_losses = np.empty((2, 0))
     test_losses = np.empty((2, 0))
 
     def save_metrics():
-        np.save('train_losses.npy', train_losses)
-        np.save('test_losses.npy', test_losses)
+        np.save('train_losses_resnet.npy', train_losses)
+        np.save('test_losses_resnet.npy', test_losses)
 
     def log_to_file(message):
         with open(log_file_path, "a") as f:
@@ -146,7 +144,7 @@ if __name__ == '__main__':  # Prevent recursive subprocess creation
         # Save checkpoint
         if (epoch + 1) % CHECKPOINT_INTERVAL == 0:
             core_model = model.module if isinstance(model, torch.nn.DataParallel) else model
-            torch.save(core_model.state_dict(), os.path.join(weight_dir, f'epoch_{epoch+1}.pth'))
+            torch.save(core_model.state_dict(), os.path.join(weight_dir, f'epoch_{epoch+1}_resnet.pth'))
 
     save_metrics()
-    torch.save(model.state_dict(), os.path.join(weight_dir, 'final.pth'))
+    torch.save(model.state_dict(), os.path.join(weight_dir, 'final_resnet.pth'))

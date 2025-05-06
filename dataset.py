@@ -6,10 +6,12 @@ import json
 import torchvision.transforms as T
 import torchvision.transforms.functional as TF
 import random
+import utils
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PIL import ImageDraw
+
 
 class YOLOPascalVoc(data.Dataset):
     def __init__(self, data_path, year, image_set, grid_size, num_predictors, transform = None, augment = True, normalize=True):
@@ -197,78 +199,120 @@ import matplotlib.patches as patches
 import os
 
 def plot_ground_truths(data, labels, classes, color='orange', min_confidence=0.2, max_overlap=0.5, file=None):
-    """Plots bounding boxes on the given image using matplotlib."""
+    """Plots bounding boxes on the given image using matplotlib.
+    
+    Args:
+        data: Image tensor (C, H, W) - augmented if dataset.augment=True
+        labels: Target tensor (S, S, B*5+C) with bounding boxes
+        classes: List of class names
+        color: Color for bounding boxes
+        min_confidence: Minimum confidence threshold to display boxes
+        max_overlap: Maximum allowed overlap between boxes
+        file: Optional file path to save the plot
+    """
+    # Denormalize the image if it's normalized
+    if torch.min(data) < 0:  # Simple check for normalization
+        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1).to(data.device)
+        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1).to(data.device)
+        data = data * std + mean  # Reverse normalization
+        data = torch.clamp(data, 0, 1)  # Ensure valid pixel range
+    
+    # Convert tensor to numpy and permute dimensions for matplotlib
+    img = data.permute(1, 2, 0).cpu().numpy()
+    
+    # Calculate grid cell sizes
+    img_height, img_width = data.shape[1], data.shape[2]
+    grid_size_x = img_width / labels.shape[1]  # S
+    grid_size_y = img_height / labels.shape[0]  # S
+    
     C = len(classes)
-    grid_size_x = data.size(dim=2) / 7
-    grid_size_y = data.size(dim=1) / 7
-    m = labels.size(dim=0)
-    n = labels.size(dim=1)
-
+    B = (labels.shape[2] - C) // 5  # Number of predictors per cell
+    
+    # Collect all bounding boxes
     bboxes = []
-    for i in range(m):
-        for j in range(n):
-            for k in range((labels.size(dim=2) - C) // 5):
-                bbox_start = 5 * k + C
-                bbox_end = 5 * (k + 1) + C
-                bbox = labels[i, j, bbox_start:bbox_end]
-                class_index = torch.argmax(labels[i, j, :C]).item()
-                confidence = labels[i, j, class_index].item() * bbox[4].item()  # pr(c) * IOU
+    for i in range(labels.shape[0]):  # rows (S)
+        for j in range(labels.shape[1]):  # cols (S)
+            for k in range(B):  # predictors
+                bbox_start = C + k * 5
+                bbox = labels[i, j, bbox_start:bbox_start+5]
+                confidence = bbox[4].item()
+                
                 if confidence > min_confidence:
-                    width = bbox[2] * 448
-                    height = bbox[3] * 448
-                    tl = (
-                        bbox[0] * 448 + j * grid_size_x - width / 2,
-                        bbox[1] * 448 + i * grid_size_y - height / 2
-                    )
-                    bboxes.append([tl, width, height, confidence, class_index])
-
-    # Sort by highest to lowest confidence
-    bboxes = sorted(bboxes, key=lambda x: x[3], reverse=True)
-
-    # Calculate IOUs between each pair of boxes
-    num_boxes = len(bboxes)
-    iou = [[0 for _ in range(num_boxes)] for _ in range(num_boxes)]
-    for i in range(num_boxes):
-        for j in range(num_boxes):
-            iou[i][j] = get_overlap(bboxes[i], bboxes[j])
+                    # Get class with highest probability
+                    class_probs = labels[i, j, :C]
+                    class_idx = torch.argmax(class_probs).item()
+                    
+                    # Convert relative coordinates to absolute
+                    rel_x, rel_y, rel_w, rel_h = bbox[:4]
+                    width = rel_w * img_width
+                    height = rel_h * img_height
+                    center_x = rel_x * img_width + j * grid_size_x
+                    center_y = rel_y * img_height + i * grid_size_y
+                    
+                    # Calculate top-left corner
+                    x = center_x - width / 2
+                    y = center_y - height / 2
+                    
+                    bboxes.append([
+                        (x, y),        # top-left coordinates
+                        width,         # box width
+                        height,        # box height
+                        confidence,    # confidence score
+                        class_idx      # class index
+                    ])
 
     # Non-maximum suppression
-    discarded = set()
-    fig, ax = plt.subplots(1, figsize=(12, 12))  # Create a single plot
-    ax.imshow(data.permute(1, 2, 0).cpu().numpy())  # Convert from tensor to numpy for imshow
+    bboxes = sorted(bboxes, key=lambda x: x[3], reverse=True)  # Sort by confidence
+    keep = []
+    
+    while len(bboxes) > 0:
+        current = bboxes.pop(0)
+        keep.append(current)
+        
+        # Remove overlapping boxes of the same class
+        bboxes = [
+            box for box in bboxes 
+            if box[4] != current[4] or  # Different class
+            get_overlap(current, box) <= max_overlap  # Low overlap
+        ]
+
+    # Create plot
+    fig, ax = plt.subplots(1, figsize=(12, 12))
+    ax.imshow(img)
     ax.axis('off')
 
-    for i in range(num_boxes):
-        if i not in discarded:
-            tl, width, height, confidence, class_index = bboxes[i]
+    # Draw kept boxes
+    for (x, y), width, height, confidence, class_idx in keep:
+        # Draw bounding box
+        rect = patches.Rectangle(
+            (x, y), width, height,
+            linewidth=2,
+            edgecolor=color,
+            facecolor='none'
+        )
+        ax.add_patch(rect)
+        
+        # Draw label
+        label = f"{classes[class_idx]} {confidence:.1%}"
+        ax.text(
+            x, y - 10, label,
+            color=color,
+            fontsize=10,
+            bbox=dict(
+                facecolor='black',
+                alpha=0.5,
+                edgecolor='none',
+                boxstyle='round,pad=0.2'
+            )
+        )
 
-            # Decrease confidence of other conflicting bboxes
-            for j in range(num_boxes):
-                other_class = bboxes[j][4]
-                if j != i and other_class == class_index and iou[i][j] > max_overlap:
-                    discarded.add(j)
-
-            # Annotate image
-            rect = patches.Rectangle(
-                tl, width, height, linewidth=2, edgecolor=color, facecolor='none')
-            ax.add_patch(rect)
-
-            # Draw text label
-            text = f'{classes[class_index]} {round(confidence * 100, 1)}%'
-            ax.text(tl[0], tl[1] - 10, text, color='orange', fontsize=10,
-                    bbox=dict(facecolor='black', alpha=0.5, edgecolor='none', boxstyle='round,pad=0.2'))
-
-    if file is None:
-        plt.show()
-    else:
-        output_dir = os.path.dirname(file)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        if not file.endswith('.png'):
-            file += '.png'
+    # Save or display
+    if file is not None:
+        os.makedirs(os.path.dirname(file), exist_ok=True)
         plt.savefig(file, bbox_inches='tight', pad_inches=0)
-    plt.close(fig)  # Close the plot after saving or showing
-
+    else:
+        plt.show()
+    plt.close(fig)
 
 def load_class_array(classes):
     result = [None for _ in range(len(classes))]
@@ -283,10 +327,10 @@ if __name__ == '__main__':
         T.Resize((448, 448))
     ])
 
-    train_set = YOLOPascalVoc("data", '2012', "train", grid_size=7, num_predictors=2, transform=transform, normalize=True, augment=True)
+    train_set = YOLOPascalVoc("data", '2007', "train", grid_size=7, num_predictors=2, transform=transform, normalize=True, augment=True)
     classes = train_set.class_dict
     classlist = load_class_array(classes)
 
     for data, label, _  in train_set:
-        plot_ground_truths(data, label, classlist, max_overlap=float('inf'))
+         utils.plot_boxes(data, label, classes, max_overlap=float('inf'))
         
