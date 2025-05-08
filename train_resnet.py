@@ -7,29 +7,29 @@ from torch.utils.data import DataLoader
 
 from dataset import YOLOPascalVoc
 from loss import SumSquaredErrorLoss
-from models import YOLOv1
+from models import YOLOv1, YOLOv1ResNet
 import torch.optim.lr_scheduler as lrs
 
 # Training configuration
 BATCH_SIZE = 64
-EPOCHS = 150
-WARMUP_EPOCHS = 10
+EPOCHS = 135
+WARMUP_EPOCHS = 0
 VAL_INTERVAL = 10
-LEARNING_RATE = 5e-5
+LEARNING_RATE = 1e-4
 NUM_WORKERS = 0
 GRID_SIZE = 7
 NUM_PREDICTORS = 2
-CHECKPOINT_INTERVAL = 40
+CHECKPOINT_INTERVAL = 20
 
-def lr_lambda(epoch):
-    if epoch < WARMUP_EPOCHS:
-        return (epoch + 1) / WARMUP_EPOCHS  
-    elif epoch < 100:
-        return 1.0
-    elif epoch < 130:
-        return 0.1
-    else:
-        return 0.01
+# def lr_lambda(epoch):
+#     if epoch < WARMUP_EPOCHS:
+#         return (epoch + 1) / WARMUP_EPOCHS  
+#     elif epoch < 100:
+#         return 1.0
+#     elif epoch < 130:
+#         return 0.1
+#     else:
+#         return 0.01
 
 if __name__ == '__main__':  # Prevent recursive subprocess creation
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -46,7 +46,7 @@ if __name__ == '__main__':  # Prevent recursive subprocess creation
     num_classes = len(train_set.class_dict)
 
     # Model and loss
-    model = YOLOv1(num_bboxes=NUM_PREDICTORS, num_classes=num_classes).to(device)
+    model = YOLOv1ResNet().to(device)
     loss_function = SumSquaredErrorLoss(num_classes, NUM_PREDICTORS)
 
     if torch.cuda.device_count() > 1:
@@ -57,7 +57,7 @@ if __name__ == '__main__':  # Prevent recursive subprocess creation
         lr=LEARNING_RATE
     )
 
-    scheduler = lrs.LambdaLR(optimizer, lr_lambda)
+    # scheduler = lrs.LambdaLR(optimizer, lr_lambda)
 
 
     train_loader = DataLoader(
@@ -68,12 +68,13 @@ if __name__ == '__main__':  # Prevent recursive subprocess creation
     )
     test_loader = DataLoader(
         test_set,
-        batch_size=BATCH_SIZE,
+        batch_size=BATCH_SIZE
+        
     )
 
     # Logging and checkpoint paths
-    log_file_path = "log.txt"
-    weight_dir = "weights"
+    log_file_path = "log_resnet.txt"
+    weight_dir = "weights_resnet"
     os.makedirs(weight_dir, exist_ok=True)
 
     train_losses = np.empty((2, 0))
@@ -103,7 +104,7 @@ if __name__ == '__main__':  # Prevent recursive subprocess creation
             predictions = model(data)
             loss = loss_function(predictions, labels)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             train_loss += loss.item() / len(train_loader)
@@ -111,8 +112,8 @@ if __name__ == '__main__':  # Prevent recursive subprocess creation
             del data, labels
         train_losses = np.append(train_losses, [[epoch], [train_loss]], axis=1)
         log_msg = f"Epoch {epoch}: Train Loss = {train_loss:.4f}"
-        log_msg += f" | LR = {scheduler.get_last_lr()[0]:.6f}"
-        scheduler.step()
+        log_msg += f" | LR = {LEARNING_RATE:.6f}"
+        # scheduler.step()
         if epoch % VAL_INTERVAL == 0:
             model.eval()
             with torch.no_grad():

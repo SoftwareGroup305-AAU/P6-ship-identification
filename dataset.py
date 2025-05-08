@@ -6,10 +6,10 @@ import json
 import torchvision.transforms as T
 import torchvision.transforms.functional as TF
 import random
-
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from PIL import ImageDraw
+from PIL import Image
+import yaml
 
 class YOLOPascalVoc(data.Dataset):
     def __init__(self, data_path, year, image_set, grid_size, num_predictors, transform = None, augment = True, normalize=True):
@@ -155,7 +155,106 @@ class YOLOPascalVoc(data.Dataset):
     
     def __len__(self):
         return len(self.dataset)
-    
+
+class YOLOv8Dataset(data.Dataset):
+    def __init__(self, data_dir, image_set, grid_size, num_predictors, transform, normalize = False, augment = False):
+        
+        with open(os.path.join(data_dir, "data.yaml"), "r") as file:
+            config = yaml.safe_load(file)
+
+        set_path = config[image_set].lstrip(os.sep)
+        self.image_dir = os.path.join(data_dir, set_path)
+        self.label_dir = os.path.join(data_dir, set_path.replace("images", "labels"))        
+        self.transform = transform
+        self.normalize = normalize
+        self.augment = augment
+        self.classes = config["names"]
+        self.S = grid_size
+        self.B = num_predictors
+        self.C = config["nc"]
+        self.depth = self.B*5+self.C
+        self.image_files = [files for files in os.listdir(self.image_dir)]
+
+    def __len__(self):
+        return len(self.image_files)
+
+    def __getitem__(self, index):
+        image_file = self.image_files[index]
+        image_path = os.path.join(self.image_dir, image_file)
+        image = Image.open(image_path).convert("RGB")
+
+        label_path = os.path.join(self.label_dir, os.path.splitext(image_file)[0] + ".txt")
+        labels = []
+        if os.path.exists(label_path):
+            with open(label_path, "r") as file:
+                for line in file:
+                    values = [float(value) for value in line.split()]
+                    labels.append(values)
+
+        if self.transform:
+            image = self.transform(image)
+
+        original_image = image
+
+        image_height, image_width = image.shape[-2:]
+        x_shift = int((0.2 * random.random() - 0.1) * image_width)
+        y_shift = int((0.2 * random.random() - 0.1) * image_height)
+        scale = 1 + 0.2 * random.random()
+
+        # Augment images
+        if self.augment:
+            image = TF.affine(image, angle=0.0, scale=scale, translate=(x_shift, y_shift), shear=0.0)
+            image = TF.adjust_hue(image, 0.2 * random.random() - 0.1)
+            image = TF.adjust_saturation(image, 0.2 * random.random() + 0.9)
+        if self.normalize:
+            image = TF.normalize(image, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+
+        target = torch.zeros((self.S, self.S, self.depth))
+
+        cell_box_counts = {}   # Tracks how many boxes have been assigned per cell
+        cell_class_flags = {} # Tracks if a class has been assigned to a cell
+
+        for label in labels:
+            c, x, y, w, h = label
+            c = int(c)
+            if not 0 <= c < self.C:
+                continue
+
+            # Convert center x/y from relative to image to absolute pixel
+            center_x = x * image_width
+            center_y = y * image_height
+
+            grid_size_x = image_width / self.S
+            grid_size_y = image_height / self.S
+
+            cell_x = int(center_x // grid_size_x)
+            cell_y = int(center_y // grid_size_y)
+            cell = (cell_y, cell_x)
+
+            if not (0 <= cell_x < self.S and 0 <= cell_y < self.S):
+                continue
+
+            rel_x = (center_x - cell_x * grid_size_x) / image_width
+            rel_y = (center_y - cell_y * grid_size_y) / image_height
+            rel_w = w  # already relative to image
+            rel_h = h  # already relative to image
+
+            # Set class one-hot only once per cell
+            if cell not in cell_class_flags:
+                one_hot = torch.zeros(self.C)
+                one_hot[c] = 1.0
+                target[cell_y, cell_x, :self.C] = one_hot
+                cell_class_flags[cell] = c
+
+            # Assign bounding box
+            box_count = cell_box_counts.get(cell, 0)
+            if box_count < self.B:
+                start = self.C + box_count * 5
+                target[cell_y, cell_x, start:start+5] = torch.tensor([rel_x, rel_y, rel_w, rel_h, 1.0])
+                cell_box_counts[cell] = box_count + 1
+
+        return image, target, original_image
+
 
 def get_overlap(a, b):
     """Returns proportion overlap between two boxes in the form (tl, width, height, confidence, class)."""
@@ -283,9 +382,12 @@ if __name__ == '__main__':
         T.Resize((448, 448))
     ])
 
-    train_set = YOLOPascalVoc("data", '2012', "train", grid_size=7, num_predictors=2, transform=transform, normalize=True, augment=True)
-    classes = train_set.class_dict
-    classlist = load_class_array(classes)
+    # train_set = YOLOPascalVoc("data", '2007', "train", grid_size=7, num_predictors=2, transform=transform, normalize=True, augment=True)
+    # classes = train_set.class_dict
+    # classlist = load_class_array(classes)
+
+    train_set = YOLOv8Dataset("hands_data", "train", grid_size=7, num_predictors=2, transform=transform, normalize=False, augment=False)
+    classlist = train_set.classes
 
     for data, label, _  in train_set:
         plot_ground_truths(data, label, classlist, max_overlap=float('inf'))

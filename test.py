@@ -20,15 +20,15 @@ def remove_data_parallel(old_state_dict):
     
     return new_state_dict
 
-MODEL_DIR = 'weights/epoch_240_c.pth'
-IMG_DIR = r"images/joe.jpg"
+MODEL_DIR = 'weights/epoch_100.pth'
+IMG_DIR = r"images/ship.jpg"
 CLASS_FILE = "data/classes.json"
 
 def plot_test_images():
 
     classes = utils.load_class_array(CLASS_FILE)
     C = len(classes)
-    model = YOLOv1(num_bboxes=2, num_classes=C)
+    model = YOLOv1ResNet()
     model.eval()
     state_dict = torch.load(MODEL_DIR, map_location="cpu")
     model.load_state_dict(state_dict)
@@ -66,7 +66,7 @@ def plot_test_images():
                     predictions,
                     classes,
                     max_overlap=0.5, 
-                    min_confidence=0.1
+                    min_confidence=0.4
                 )
 
 
