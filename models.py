@@ -72,11 +72,11 @@ class YOLOv1(nn.Module):
 #       Transfer Learning       #
 #################################
 class YOLOv1ResNet(nn.Module):
-    def __init__(self):
+    def __init__(self, num_classes, num_predictors):
         super().__init__()
         self.S = 7
-        self.B = 2
-        self.C = 20
+        self.B = num_predictors
+        self.C = num_classes
         self.depth = self.B * 5 + self.C
 
         # Load backbone ResNet
@@ -90,7 +90,7 @@ class YOLOv1ResNet(nn.Module):
         self.model = nn.Sequential(
             backbone,
             Reshape(2048, 14, 14),
-            DetectionNet(2048)              # 4 conv, 2 linear
+            DetectionNet(2048, self.C, self.B)              # 4 conv, 2 linear
         )
 
     def forward(self, x):
@@ -100,10 +100,10 @@ class YOLOv1ResNet(nn.Module):
 class DetectionNet(nn.Module):
     """The layers added on for detection as described in the paper."""
 
-    def __init__(self, in_channels):
+    def __init__(self, in_channels, num_classes, num_predictors):
         super().__init__()
-        self.B = 2
-        self.C = 20
+        self.B = num_predictors
+        self.C = num_classes
         self.S = 7
 
         inner_channels = 1024

@@ -386,7 +386,7 @@ if __name__ == '__main__':
     # classes = train_set.class_dict
     # classlist = load_class_array(classes)
 
-    train_set = YOLOv8Dataset("hands_data", "train", grid_size=7, num_predictors=2, transform=transform, normalize=False, augment=False)
+    train_set = YOLOv8Dataset("data/ship-detection", "train", grid_size=7, num_predictors=2, transform=transform, normalize=False, augment=False)
     classlist = train_set.classes
 
     for data, label, _  in train_set:

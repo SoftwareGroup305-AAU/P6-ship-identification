@@ -5,7 +5,7 @@ import torchvision.transforms as T
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
-from dataset import YOLOPascalVoc
+from dataset import YOLOv8Dataset
 from loss import SumSquaredErrorLoss
 from models import YOLOv1, YOLOv1ResNet
 import torch.optim.lr_scheduler as lrs
@@ -40,10 +40,10 @@ if __name__ == '__main__':  # Prevent recursive subprocess creation
         T.ToTensor(),
         T.Resize((448, 448))
     ])
-    train_set = YOLOPascalVoc('data', '2007', 'train', grid_size=GRID_SIZE, num_predictors=NUM_PREDICTORS, transform=transform, normalize=True, augment=True)
-    test_set = YOLOPascalVoc('data', '2007', 'val', grid_size=GRID_SIZE, num_predictors=NUM_PREDICTORS, transform=transform, normalize=True, augment=True)
+    train_set = YOLOv8Dataset(r'data/ship-detection', 'train', grid_size=GRID_SIZE, num_predictors=NUM_PREDICTORS, transform=transform, normalize=True, augment=True)
+    test_set = YOLOv8Dataset(r'data/ship-detection', 'val', grid_size=GRID_SIZE, num_predictors=NUM_PREDICTORS, transform=transform, normalize=True, augment=False)
 
-    num_classes = len(train_set.class_dict)
+    num_classes = train_set.C
 
     # Model and loss
     model = YOLOv1ResNet(num_classes, NUM_PREDICTORS).to(device)
@@ -73,8 +73,8 @@ if __name__ == '__main__':  # Prevent recursive subprocess creation
     )
 
     # Logging and checkpoint paths
-    log_file_path = "log_resnet.txt"
-    weight_dir = "weights_resnet"
+    log_file_path = "log_resnet_ship.txt"
+    weight_dir = "weights_resnet_ship"
     os.makedirs(weight_dir, exist_ok=True)
 
     train_losses = np.empty((2, 0))
