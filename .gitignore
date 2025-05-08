@@ -1,5 +1,8 @@
 .venv
 
+data
+weights
+
 yolo/data/**/images/
 yolo/data/**/labels/
 
