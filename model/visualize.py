@@ -125,13 +125,13 @@ def visualize_predictions(model_path, image_path, conf_threshold=0.1, num_classe
 if __name__ == "__main__":
     # Placeholders for model and image paths
     MODEL_PATH = "initial_yolo_last.pth"
-    IMAGE_PATH = "warship.jpg"
+    IMAGE_PATH = "sail_boat.jpg"
     
     # Lowered confidence threshold to see more detections
     visualize_predictions(
         model_path=MODEL_PATH, 
         image_path=IMAGE_PATH, 
-        conf_threshold=0.999,
+        conf_threshold=0.9,
         num_classes=6,
         debug=True 
     )
