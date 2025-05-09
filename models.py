@@ -44,7 +44,6 @@ class Head(nn.Module):
         x = F.relu(self.conv(x))
         classification_output = (self.classification(x)).permute(0, 2, 3, 1).contiguous()
         objectness_output = F.sigmoid(self.objectness(x)).squeeze(1)
-        # objectness_output = F.sigmoid(self.objectness(x)).permute(0, 2, 3, 1).contiguous()
         localization_output = F.sigmoid(self.localization(x)).permute(0, 2, 3, 1).contiguous()
         return classification_output, objectness_output, localization_output
 
