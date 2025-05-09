@@ -1,75 +1,59 @@
-import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
+class ConvBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding):
+        super(ConvBlock, self).__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
+        self.bn = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU()
 
-class YOLOv1(nn.Module):
-    def __init__(self, num_bboxes: int, num_classes: int):
+    def forward(self, images):
+        return self.relu(self.bn(self.conv(images)))
+
+class Backbone(nn.Module):
+    def __init__(self):
         super().__init__()
-        self.B = num_bboxes
-        self.C = num_classes
-        self.S = 7
-        self.depth = self.B*5+self.C
+        self.layers = nn.Sequential(
+            ConvBlock(3, 16, 3, 1, 1),
+            nn.MaxPool2d(2, 2),
+            ConvBlock(16, 32, 3, 1, 1),
+            nn.MaxPool2d(2, 2),
+            ConvBlock(32, 64, 3, 1, 1),
+            nn.MaxPool2d(2, 2),
+            ConvBlock(64, 128, 3, 1, 1),
+            nn.MaxPool2d(2, 2),
+            ConvBlock(128, 256, 3, 1, 1),
+            nn.MaxPool2d(2, 2),
+            ConvBlock(256, 512, 3, 1, 1),
+            nn.MaxPool2d(2, 2),
+        )
 
-        layers = [
-            ### Conv 1 ###
-            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=2),
-            nn.LeakyReLU(negative_slope=0.1),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            ### Conv 2 ###
-            nn.Conv2d(64, 192, kernel_size=3, padding=1),
-            nn.LeakyReLU(negative_slope=0.1),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            ### Conv 3 ###
-            nn.Conv2d(192, 128, kernel_size=1),
-            nn.LeakyReLU(negative_slope=0.1),
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.LeakyReLU(negative_slope=0.1),
-            nn.Conv2d(256, 256, kernel_size=1),
-            nn.LeakyReLU(negative_slope=0.1),
-            nn.Conv2d(256, 512, kernel_size=3, padding=1),
-            nn.LeakyReLU(negative_slope=0.1),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            ### Conv 4 ###
-            *[
-                nn.Conv2d(512, 256, kernel_size=1),
-                nn.Conv2d(256, 512, kernel_size=3, padding=1),
-                nn.LeakyReLU(negative_slope=0.1),
-            ] * 4,
-            nn.Conv2d(512, 512, kernel_size=1),
-            nn.Conv2d(512, 1024, kernel_size=3, padding=1),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            ### Conv 5 ###
-            *[
-                nn.Conv2d(1024, 512, kernel_size=1),
-                nn.Conv2d(512, 1024, kernel_size=3, padding=1),
-                nn.LeakyReLU(negative_slope=0.1),
-            ] * 2,
-            nn.Conv2d(1024, 1024, kernel_size=3, padding=1),
-            nn.LeakyReLU(negative_slope=0.1),
-            nn.Conv2d(1024, 1024, kernel_size=3, padding=1, stride=2),
-            nn.LeakyReLU(negative_slope=0.1),
-            ### Conv 6 ###
-            nn.Conv2d(1024, 1024, kernel_size=3, padding=1),
-            nn.LeakyReLU(negative_slope=0.1),
-            nn.Conv2d(1024, 1024, kernel_size=3, padding=1), 
-            nn.LeakyReLU(negative_slope=0.1),
-            ### Linear 1 ###
-            nn.Flatten(),
-            nn.Linear(self.S*self.S*1024, 4096),
-            nn.LeakyReLU(negative_slope=0.1),
-            ### Linear 2 ###
-            nn.Dropout(),
-            nn.Linear(4096, self.S*self.S*self.depth),
+    def forward(self, images):
+        return self.layers(images)
 
-        ]
-        self.model = nn.Sequential(*layers)
+class Head(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+        self.conv = nn.Conv2d(512, 128, 3, padding=1)
+        self.classification = nn.Conv2d(128, num_classes, 1)
+        self.objectness = nn.Conv2d(128, 1, 1)
+        self.localization = nn.Conv2d(128, 4, 1)
+
     def forward(self, x):
-        x = self.model(x)
-        return torch.reshape(x, (x.shape[0], self.S, self.S, self.depth))
-        
-if __name__ == '__main__':
-    ### TESTING ###
-    model = YOLOv1(num_bboxes=2, num_classes=20)
-    dummy_input = torch.randn(1, 3, 448, 448)
-    out = model(dummy_input)
-    print("Output shape:", out.shape) 
+        x = F.relu(self.conv(x))
+        classification_output = (self.classification(x)).permute(0, 2, 3, 1).contiguous()
+        objectness_output = F.sigmoid(self.objectness(x)).squeeze(1)
+        # objectness_output = F.sigmoid(self.objectness(x)).permute(0, 2, 3, 1).contiguous()
+        localization_output = F.sigmoid(self.localization(x)).permute(0, 2, 3, 1).contiguous()
+        return classification_output, objectness_output, localization_output
+
+class YOLO(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+        self.backbone = Backbone()
+        self.head = Head(num_classes)
+    
+    def forward(self, images):
+        feature_map = self.backbone(images)
+        return self.head(feature_map)
