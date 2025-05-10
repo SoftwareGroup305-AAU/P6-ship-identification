@@ -5,7 +5,7 @@ from torchvision.io import read_image
 import yaml
 
 class YOLOv8Dataset(Dataset):
-    def __init__(self, data_dir, image_set, grid_size, transform, normalize = False, augment = False):
+    def __init__(self, data_dir, image_set, grid_size, transform, normalize = False, augment = False, raw_labels=False):
         
         with open(os.path.join(data_dir, "data.yaml"), "r") as file:
             config = yaml.safe_load(file)
@@ -20,6 +20,7 @@ class YOLOv8Dataset(Dataset):
         self.S = grid_size
         self.C = config["nc"]
         self.image_files = [files for files in os.listdir(self.image_dir)]
+        self.raw_labels = raw_labels
 
     def __len__(self):
         return len(self.image_files)
@@ -28,7 +29,6 @@ class YOLOv8Dataset(Dataset):
         image_file = self.image_files[index]
         image_path = os.path.join(self.image_dir, image_file)
         image = read_image(image_path)
-        original_image = image
 
         if self.transform:
             image = self.transform(image)
@@ -40,6 +40,8 @@ class YOLOv8Dataset(Dataset):
                 for line in file:
                     values = [float(value) for value in line.split()]
                     labels.append(values)
+        if self.raw_labels:
+            return image, labels
         objectness_target = torch.zeros((self.S, self.S))
         class_target = torch.zeros((self.S, self.S, self.C))
         localization_target = torch.zeros((self.S, self.S, 4))
@@ -53,7 +55,7 @@ class YOLOv8Dataset(Dataset):
             objectness_target[grid_y, grid_x] = 1
             class_target[grid_y, grid_x, c] = 1
             localization_target[grid_y, grid_x] = torch.tensor([x,y,w,h])
-        return image, (class_target, objectness_target, localization_target), original_image
+        return image, (class_target, objectness_target, localization_target)
     
     @staticmethod
     def collate_fn(batch):
@@ -70,7 +72,7 @@ class YOLOv8Dataset(Dataset):
 import matplotlib.pyplot as plt
 import numpy as np
 import torchvision.transforms as T
-from utils import plot_boxes_from_yolo_target
+from utils import plot_boxes
 
 if __name__ == "__main__":
 
@@ -78,9 +80,9 @@ if __name__ == "__main__":
         T.Resize((448, 448))
     ])
 
-    train_set = YOLOv8Dataset("data/ship-detection", "train", grid_size=7, transform=transform, normalize=False, augment=False)
+    train_set = YOLOv8Dataset("data/ship-detection_6", "train", grid_size=7, transform=transform, normalize=False, augment=False)
     classlist = train_set.classes
     for data, targets in train_set:
-        plot_boxes_from_yolo_target(data, *targets, conf_threshold=0.5, class_names=classlist)
+        plot_boxes(data, *targets, conf_threshold=0.5, class_names=classlist)
 
             

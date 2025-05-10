@@ -17,7 +17,7 @@ def compute_iou(box1, box2):
 
     return inter_area / union_area if union_area > 0 else 0
 
-def plot_boxes_from_yolo_target(image_tensor, class_target, objectness_target, localization_target, class_names=None, conf_threshold=0.5, max_overlap=0.5):
+def plot_boxes(image_tensor, class_target, objectness_target, localization_target, class_names=None, conf_threshold=0.5, max_overlap=0.5):
     """
     Visualizes YOLO-style grid-based targets on an image tensor, with optional overlap suppression.
     """
@@ -82,3 +82,8 @@ def plot_boxes_from_yolo_target(image_tensor, class_target, objectness_target, l
     plt.axis('off')
     plt.tight_layout()
     plt.show()
+
+def log_to_file(message, file_path):
+    with open(file_path, "a") as f:
+        f.write(message + "\n")
+    print(message)

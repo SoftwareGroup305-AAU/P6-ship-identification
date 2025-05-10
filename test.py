@@ -4,7 +4,7 @@ from dataset import YOLOv8Dataset
 import matplotlib.pyplot as plt
 import numpy as np
 from torchvision import transforms
-from utils import plot_boxes_from_yolo_target
+from utils import plot_boxes
 
 
 if __name__ == "__main__":
@@ -26,4 +26,4 @@ if __name__ == "__main__":
             data = data.unsqueeze(0)
             output = model(data)
             output = tuple(t.squeeze(0) for t in output)
-            plot_boxes_from_yolo_target(original_data, *output, class_names=classlist, conf_threshold=0.5, max_overlap=0.3)
+            plot_boxes(original_data, *output, class_names=classlist, conf_threshold=0.5, max_overlap=0.3)
