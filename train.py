@@ -10,6 +10,10 @@ from validation import validate_model
 import utils
 import os
 
+def raw_targets_collate_fn(batch):
+    images, targets = zip(*batch)
+    images = torch.stack(images)
+    return images, list(targets)
 
 class Config:
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -24,6 +28,7 @@ class Config:
     IMG_SIZE = (448, 448)
     LOG_FILE_PATH = "log.txt"
     WEIGHT_DIR = "weights"
+    NUM_WORKERS = 8
 
 def main():
     #################################
@@ -34,6 +39,9 @@ def main():
     model = model.to(Config.DEVICE)
     if Config.NUM_GPUS > 1:
         model = nn.DataParallel(model, device_ids=[id for id in range(Config.NUM_GPUS)], output_device=0)
+        print(f"Using {Config.NUM_GPUS} GPU's")
+    else:
+        print(f"Using { 1 if Config.NUM_GPUS > 0 else 0} GPU's")
 
     criterion = CompositeLoss(Config.NUM_CLASSES)
 
@@ -46,21 +54,24 @@ def main():
         T.ConvertImageDtype(torch.float)
     ])
 
-    train_set = YOLOv8Dataset("data/ship-detection_6", "train", grid_size=7, transform=transform)
-    val_set = YOLOv8Dataset("data/ship-detection_6", "val", grid_size=7, transform=transform, raw_labels=True)
+    train_set = YOLOv8Dataset("data/ship-detection-6", "train", grid_size=7, transform=transform)
+    val_set = YOLOv8Dataset("data/ship-detection-6", "val", grid_size=7, transform=transform, raw_labels=True)
 
     train_loader = DataLoader(
         train_set,
         batch_size=Config.BATCH_SIZE,
         drop_last=True,
         shuffle=True,
-        collate_fn=train_set.collate_fn
+        num_workers=Config.NUM_WORKERS,
+        persistent_workers=Config.NUM_WORKERS > 0
     )
     val_loader = DataLoader(
         val_set,
         batch_size=Config.BATCH_SIZE,
         drop_last=True,
-        collate_fn=train_set.collate_fn
+        collate_fn=raw_targets_collate_fn,
+        num_workers=Config.NUM_WORKERS,
+        persistent_workers=Config.NUM_WORKERS > 0
     )
     #################################
     #             TRAIN             #
@@ -95,7 +106,7 @@ def main():
                                     img_size=Config.IMG_SIZE[0], 
                                     stride=Config.STRIDE)
             mAP = result[0]
-            log_msg += f" | Val mAP = {mAP:.4f}"
+            log_msg += f" | Val mAP = {mAP:.10f}"
         utils.log_to_file(log_msg, Config.LOG_FILE_PATH)
 
     #################################
@@ -104,6 +115,7 @@ def main():
         if (epoch + 1) % Config.CHECKPOINT_INTERVAL == 0:
             core_model = model.module if isinstance(model, torch.nn.DataParallel) else model
             torch.save(core_model.state_dict(), os.path.join(Config.WEIGHT_DIR, f'epoch_{epoch+1}.pth'))
-
+    core_model = model.module if isinstance(model, torch.nn.DataParallel) else model
+    torch.save(core_model.state_dict(), os.path.join(Config.WEIGHT_DIR, f'final.pth'))
 if __name__ == "__main__":
     main()
