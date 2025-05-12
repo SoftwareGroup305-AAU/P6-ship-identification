@@ -49,13 +49,11 @@ def main():
         model.parameters(),
         lr=Config.LEARNING_RATE
     )
-    transform = T.Compose([
-        T.Resize(Config.IMG_SIZE),
-        T.ConvertImageDtype(torch.float)
-    ])
+    train_transform = utils.YoloAugment(resize=(448,448), hflip_prob=0.5, rotate_prob=0.3, augment=True)
+    val_transform = utils.YoloAugment(resize=(448,448))
 
-    train_set = YOLOv8Dataset("data/ship-detection-6", "train", grid_size=7, transform=transform)
-    val_set = YOLOv8Dataset("data/ship-detection-6", "val", grid_size=7, transform=transform, raw_labels=True)
+    train_set = YOLOv8Dataset("data/ship-detection-6", "train", grid_size=7, transform=train_transform)
+    val_set = YOLOv8Dataset("data/ship-detection-6", "val", grid_size=7, transform=val_transform, raw_labels=True)
 
     train_loader = DataLoader(
         train_set,
