@@ -7,8 +7,8 @@ import pandas as pd
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.ops import nms
-from dataset import YOLODataset
 from models import YOLO
+from tqdm import tqdm
 
 def collate_fn(batch):
     images, targets = zip(*batch)
@@ -100,7 +100,7 @@ def validate_model(model, dataloader,
     conf_mat = torch.zeros((num_classes, num_classes), dtype=torch.int32)
 
     with torch.no_grad():
-        for images, targets in dataloader:
+        for images, targets in tqdm(dataloader, desc="Val"):
             images = images.to(device)
             # your model returns (cls_out, obj_out, loc_out)
             cls_out, obj_out, loc_out = model(images)
