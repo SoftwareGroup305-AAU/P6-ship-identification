@@ -2,10 +2,12 @@ import os
 import torch
 from torch.utils.data import Dataset
 from torchvision.io import read_image
+import utils
 import yaml
+import torchvision.transforms.functional as TF
 
 class YOLOv8Dataset(Dataset):
-    def __init__(self, data_dir, image_set, grid_size, transform, normalize = False, augment = False, raw_labels=False):
+    def __init__(self, data_dir, image_set, grid_size, transform: utils.YoloAugment, raw_labels=False):
         
         with open(os.path.join(data_dir, "data.yaml"), "r") as file:
             config = yaml.safe_load(file)
@@ -14,8 +16,6 @@ class YOLOv8Dataset(Dataset):
         self.image_dir = os.path.join(data_dir, set_path)
         self.label_dir = os.path.join(data_dir, set_path.replace("images", "labels"))        
         self.transform = transform
-        self.normalize = normalize
-        self.augment = augment
         self.classes = config["names"]
         self.S = grid_size
         self.C = config["nc"]
@@ -28,11 +28,7 @@ class YOLOv8Dataset(Dataset):
     def __getitem__(self, index):
         image_file = self.image_files[index]
         image_path = os.path.join(self.image_dir, image_file)
-        image = read_image(image_path)
-
-        if self.transform:
-            image = self.transform(image)
-
+        image = read_image(image_path).float() / 255.0
         label_path = os.path.join(self.label_dir, os.path.splitext(image_file)[0] + ".txt")
         labels = []
         if os.path.exists(label_path):
@@ -40,6 +36,8 @@ class YOLOv8Dataset(Dataset):
                 for line in file:
                     values = [float(value) for value in line.split()]
                     labels.append(values)
+        if self.transform:
+            image, labels = self.transform(image, labels)
         if self.raw_labels:
             return image, labels
         objectness_target = torch.zeros((self.S, self.S))
@@ -56,31 +54,14 @@ class YOLOv8Dataset(Dataset):
             class_target[grid_y, grid_x, c] = 1
             localization_target[grid_y, grid_x] = torch.tensor([x,y,w,h])
         return image, (class_target, objectness_target, localization_target)
-    
-    @staticmethod
-    def collate_fn(batch):
-        images, targets = zip(*batch)
-        class_targets, objectness_targets, localization_targets = zip(*targets)
 
-        images = torch.stack(images)
-        class_targets = torch.stack(class_targets)
-        objectness_targets = torch.stack(objectness_targets)
-        localization_targets = torch.stack(localization_targets)
-
-        return images, (class_targets, objectness_targets, localization_targets)
-
-import matplotlib.pyplot as plt
-import numpy as np
-import torchvision.transforms as T
 from utils import plot_boxes
 
 if __name__ == "__main__":
 
-    transform = T.Compose([
-        T.Resize((448, 448))
-    ])
+    transform = utils.YoloAugment(resize=(448,448), hflip_prob=0.5, rotate_prob=0.3, max_rotate_angle=30, augment=True)
 
-    train_set = YOLOv8Dataset("data/ship-detection_6", "train", grid_size=7, transform=transform, normalize=False, augment=False)
+    train_set = YOLOv8Dataset("data/ship-detection-6", "train", grid_size=7, transform=transform)
     classlist = train_set.classes
     for data, targets in train_set:
         plot_boxes(data, *targets, conf_threshold=0.5, class_names=classlist)
