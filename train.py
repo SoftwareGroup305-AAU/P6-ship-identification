@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from models import YOLO
 from dataset import YOLOv8Dataset
 from loss import CompositeLoss
-import tqdm
+from tqdm import tqdm
 from validation import validate_model
 import utils
 import os
@@ -30,7 +30,6 @@ def main():
     #             SETUP             #
     #################################
     os.makedirs(Config.WEIGHT_DIR, exist_ok=True)
-    os.makedirs(os.path.dirname(Config.LOG_FILE_PATH), exist_ok=True)
     model = YOLO(Config.NUM_CLASSES)
     model = model.to(Config.DEVICE)
     if Config.NUM_GPUS > 1:
@@ -43,22 +42,25 @@ def main():
         lr=Config.LEARNING_RATE
     )
     transform = T.Compose([
-        T.Resize(Config.IMG_SIZE)
+        T.Resize(Config.IMG_SIZE),
+        T.ConvertImageDtype(torch.float)
     ])
 
     train_set = YOLOv8Dataset("data/ship-detection_6", "train", grid_size=7, transform=transform)
-    val_set = YOLOv8Dataset("data/ship-detection_6", "val", grid_size=7, transform=transform)
+    val_set = YOLOv8Dataset("data/ship-detection_6", "val", grid_size=7, transform=transform, raw_labels=True)
 
     train_loader = DataLoader(
         train_set,
         batch_size=Config.BATCH_SIZE,
         drop_last=True,
-        shuffle=True
+        shuffle=True,
+        collate_fn=train_set.collate_fn
     )
     val_loader = DataLoader(
         val_set,
         batch_size=Config.BATCH_SIZE,
-        drop_last=True
+        drop_last=True,
+        collate_fn=train_set.collate_fn
     )
     #################################
     #             TRAIN             #

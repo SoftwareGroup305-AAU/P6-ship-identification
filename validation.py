@@ -7,7 +7,6 @@ import pandas as pd
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.ops import nms
-from dataset import YOLODataset
 from models import YOLO
 
 def collate_fn(batch):
