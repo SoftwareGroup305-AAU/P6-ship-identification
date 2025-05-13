@@ -46,7 +46,8 @@ class YOLOv8Dataset(Dataset):
         for label in labels:
             c, x, y, w, h = label
             c = int(c)
-            
+            x = min(max(x, 0), 1 - 1e-6) # clamp if out of range
+            y = min(max(y, 0), 1 - 1e-6)
             grid_x = int(x * self.S)
             grid_y = int(y * self.S)
 
