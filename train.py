@@ -20,6 +20,7 @@ class Config:
     NUM_GPUS = torch.cuda.device_count()
     BATCH_SIZE = 32
     NUM_CLASSES = 6
+    NUM_PREDICTORS = 2
     LEARNING_RATE = 1e-4
     EPOCHS = 135
     STRIDE = 64
@@ -28,14 +29,14 @@ class Config:
     IMG_SIZE = (448, 448)
     LOG_FILE_PATH = "log.txt"
     WEIGHT_DIR = "weights"
-    NUM_WORKERS = 8
+    NUM_WORKERS = 0
 
 def main():
     #################################
     #             SETUP             #
     #################################
     os.makedirs(Config.WEIGHT_DIR, exist_ok=True)
-    model = YOLO(Config.NUM_CLASSES)
+    model = YOLO(Config.NUM_CLASSES, Config.NUM_PREDICTORS)
     model = model.to(Config.DEVICE)
     if Config.NUM_GPUS > 1:
         model = nn.DataParallel(model, device_ids=[id for id in range(Config.NUM_GPUS)], output_device=0)
@@ -52,8 +53,8 @@ def main():
     train_transform = utils.YoloAugment(resize=(448,448), hflip_prob=0.5, rotate_prob=0.3, augment=True)
     val_transform = utils.YoloAugment(resize=(448,448))
 
-    train_set = YOLOv8Dataset("data/ship-detection-6", "train", grid_size=7, transform=train_transform)
-    val_set = YOLOv8Dataset("data/ship-detection-6", "val", grid_size=7, transform=val_transform, raw_labels=True)
+    train_set = YOLOv8Dataset("data/ship-detection-6", "train", grid_size=7, num_predictors=Config.NUM_PREDICTORS, transform=train_transform)
+    val_set = YOLOv8Dataset("data/ship-detection-6", "val", grid_size=7, num_predictors=Config.NUM_PREDICTORS, transform=val_transform, raw_labels=True)
 
     train_loader = DataLoader(
         train_set,

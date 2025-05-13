@@ -8,7 +8,7 @@ from utils import plot_boxes
 
 
 if __name__ == "__main__":
-    MODEL_DIR = r"weights/final.pth"
+    MODEL_DIR = r"weights/final_135_no_aug.pth"
 
     transform = T.Compose([
         T.Resize((448, 448)),

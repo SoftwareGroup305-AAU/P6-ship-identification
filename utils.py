@@ -86,46 +86,50 @@ def compute_iou(box1, box2):
 
     return inter_area / union_area if union_area > 0 else 0
 
-def plot_boxes(image_tensor, class_target, objectness_target, localization_target, class_names=None, conf_threshold=0.5, max_overlap=0.5):
+def plot_boxes(image_tensor, class_target, objectness_target, localization_target,
+               class_names=None, conf_threshold=0.5, max_overlap=0.5):
     """
-    Visualizes YOLO-style grid-based targets on an image tensor, with optional overlap suppression.
+    Visualizes YOLO-style grid-based targets with multiple predictors per cell.
     """
     image = TF.to_pil_image(image_tensor.cpu())
     w, h = image.size
-    S = objectness_target.shape[0]
+    S, _, B = objectness_target.shape
 
     fig, ax = plt.subplots(1)
     ax.imshow(image)
 
     boxes = []
 
-    # Collect all boxes above confidence threshold
     for i in range(S):
         for j in range(S):
-            obj_score = objectness_target[i, j].item()
-            if obj_score < conf_threshold:
-                continue
+            for b in range(B):
+                obj_score = objectness_target[i, j, b].item()
+                if obj_score < conf_threshold:
+                    continue
 
-            x, y, bw, bh = localization_target[i, j]
-            x *= w
-            y *= h
-            bw *= w
-            bh *= h
-            x1 = x - bw / 2
-            y1 = y - bh / 2
-            x2 = x + bw / 2
-            y2 = y + bh / 2
+                x, y, bw, bh = localization_target[i, j, b]
+                x *= w
+                y *= h
+                bw *= w
+                bh *= h
+                x1 = x - bw / 2
+                y1 = y - bh / 2
+                x2 = x + bw / 2
+                y2 = y + bh / 2
 
-            class_idx = class_target[i, j].argmax().item() if class_names else -1
-            boxes.append({
-                'coords': [x1, y1, x2, y2],
-                'conf': obj_score,
-                'class_idx': class_idx
-            })
+                if class_names:
+                    class_idx = class_target[i, j, b].argmax().item()
+                else:
+                    class_idx = -1
 
-    # Sort by confidence
+                boxes.append({
+                    'coords': [x1, y1, x2, y2],
+                    'conf': obj_score,
+                    'class_idx': class_idx
+                })
+
+    # Sort and apply NMS-like overlap suppression
     boxes.sort(key=lambda b: b['conf'], reverse=True)
-
     final_boxes = []
 
     while boxes:

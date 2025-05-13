@@ -7,7 +7,7 @@ import yaml
 import torchvision.transforms.functional as TF
 
 class YOLOv8Dataset(Dataset):
-    def __init__(self, data_dir, image_set, grid_size, transform: utils.YoloAugment, raw_labels=False):
+    def __init__(self, data_dir, image_set, grid_size, num_predictors, transform: utils.YoloAugment, raw_labels=False):
         
         with open(os.path.join(data_dir, "data.yaml"), "r") as file:
             config = yaml.safe_load(file)
@@ -19,6 +19,7 @@ class YOLOv8Dataset(Dataset):
         self.classes = config["names"]
         self.S = grid_size
         self.C = config["nc"]
+        self.B = num_predictors
         self.image_files = [files for files in os.listdir(self.image_dir)]
         self.raw_labels = raw_labels
 
@@ -40,9 +41,10 @@ class YOLOv8Dataset(Dataset):
             image, labels = self.transform(image, labels)
         if self.raw_labels:
             return image, labels
-        objectness_target = torch.zeros((self.S, self.S))
+        objectness_target = torch.zeros((self.S, self.S, self.B))
         class_target = torch.zeros((self.S, self.S, self.C))
-        localization_target = torch.zeros((self.S, self.S, 4))
+        localization_target = torch.zeros((self.S, self.S, self.B, 4))
+        cell_box_count = {}
         for label in labels:
             c, x, y, w, h = label
             c = int(c)
@@ -50,19 +52,21 @@ class YOLOv8Dataset(Dataset):
             y = min(max(y, 0), 1 - 1e-6)
             grid_x = int(x * self.S)
             grid_y = int(y * self.S)
-
-            objectness_target[grid_y, grid_x] = 1
+            cell = (grid_y, grid_x)
+            box_count = cell_box_count.get(cell, 0)
+            for box_idx in range(box_count, self.B):
+                objectness_target[grid_y, grid_x, box_idx] = 1
+                localization_target[grid_y, grid_x, box_idx] = torch.tensor([x,y,w,h])
             class_target[grid_y, grid_x, c] = 1
-            localization_target[grid_y, grid_x] = torch.tensor([x,y,w,h])
+            cell_box_count[cell] = box_count + 1
         return image, (class_target, objectness_target, localization_target)
-
 from utils import plot_boxes
 
 if __name__ == "__main__":
 
     transform = utils.YoloAugment(resize=(448,448), hflip_prob=0.5, rotate_prob=0.3, max_rotate_angle=30, augment=True)
 
-    train_set = YOLOv8Dataset("data/ship-detection-6", "train", grid_size=7, transform=transform)
+    train_set = YOLOv8Dataset("data/ship-detection-6", "train", grid_size=7, num_predictors=2, transform=transform)
     classlist = train_set.classes
     for data, targets in train_set:
         plot_boxes(data, *targets, conf_threshold=0.5, class_names=classlist)

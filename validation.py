@@ -15,52 +15,67 @@ def collate_fn(batch):
     images = torch.stack(images)
     return images, list(targets)
 
-def decode_predictions(pred_loc, pred_cls,
+def decode_predictions(loc_pred, cls_pred, obj_pred,
                        conf_thresh=0.5,
-                       stride=64,   # your network’s down-sampling factor
+                       stride=64,
                        img_size=448):
     """
-    pred_loc:  (B, 4, H, W)  — four normalized [0,1] offsets: (l, t, r, b)
-    pred_cls:  (B, C, H, W) — raw logits
+    loc_pred: (B, S, S, B, 4)
+    cls_pred: (B, S, S, B, C)
+    obj_pred: (B, S, S, B)
     """
-    B, C, H, W = pred_cls.shape
-    device = pred_cls.device
+    B, S, _, num_preds, _ = loc_pred.shape
+    device = loc_pred.device
+    grid_y, grid_x = torch.meshgrid(
+        torch.arange(S, device=device), torch.arange(S, device=device), indexing="ij"
+    )
+    grid_x = grid_x.unsqueeze(-1).repeat(1, 1, num_preds)
+    grid_y = grid_y.unsqueeze(-1).repeat(1, 1, num_preds)
 
-    # precompute grid centers
-    shifts_x = (torch.arange(W, device=device) + 0.5) * stride
-    shifts_y = (torch.arange(H, device=device) + 0.5) * stride
-    grid_y, grid_x = torch.meshgrid(shifts_y, shifts_x, indexing="ij")
-    grid_x = grid_x.reshape(-1)
-    grid_y = grid_y.reshape(-1)
+    cx = (grid_x + 0.5) * stride
+    cy = (grid_y + 0.5) * stride
 
-    all_boxes, all_scores, all_labels = [], [], []
-    for b in range(B):
-        # 1) class scores
-        cls_prob = torch.sigmoid(pred_cls[b]).view(C, -1)     # (C, H*W)
-        scores, labels = cls_prob.max(dim=0)                  # best class per cell
+    cx = cx.unsqueeze(0).expand(B, -1, -1, -1).reshape(B, -1)
+    cy = cy.unsqueeze(0).expand(B, -1, -1, -1).reshape(B, -1)
 
-        # 2) bbox offsets in pixels
-        loc = pred_loc[b].view(4, -1)                         # (4, H*W)
-        # assume l,t,r,b are normalized to [0,1] of the whole image:
-        loc_px = loc * img_size                              # scale to pixels
-        l, t, r, b_ = loc_px
+    loc_pred = loc_pred.reshape(B, -1, 4)
+    cls_pred = cls_pred.reshape(B, -1, cls_pred.shape[-1])
+    obj_pred = obj_pred.reshape(B, -1)
 
-        # 3) corner coordinates
-        x1 = (grid_x - l).clamp(0, img_size)
-        y1 = (grid_y - t).clamp(0, img_size)
-        x2 = (grid_x + r).clamp(0, img_size)
-        y2 = (grid_y + b_).clamp(0, img_size)
+    boxes_out, scores_out, labels_out = [], [], []
+    for i in range(B):
+        box = loc_pred[i]
+        obj = torch.sigmoid(obj_pred[i])
+        cls = torch.sigmoid(cls_pred[i])
+        score, label = cls.max(dim=-1)
+        score = score * obj
 
-        # 4) filter by confidence + size
-        keep = (scores > conf_thresh) & ((x2 - x1) > 1) & ((y2 - y1) > 1)
-        idxs = keep.nonzero(as_tuple=False).squeeze(1)
+        keep = score > conf_thresh
+        if keep.sum() == 0:
+            boxes_out.append(torch.empty((0, 4), device=device))
+            scores_out.append(torch.empty((0,), device=device))
+            labels_out.append(torch.empty((0,), dtype=torch.int64, device=device))
+            continue
 
-        boxes = torch.stack([x1[idxs], y1[idxs], x2[idxs], y2[idxs]], dim=1)
-        all_boxes.append(boxes)
-        all_scores.append(scores[idxs])
-        all_labels.append(labels[idxs])
+        box = box[keep]
+        score = score[keep]
+        label = label[keep]
+        x_ctr = cx[i][keep]
+        y_ctr = cy[i][keep]
 
-    return all_boxes, all_scores, all_labels
+        x1 = (x_ctr - box[:, 2] * img_size / 2).clamp(0, img_size)
+        y1 = (y_ctr - box[:, 3] * img_size / 2).clamp(0, img_size)
+        x2 = (x_ctr + box[:, 2] * img_size / 2).clamp(0, img_size)
+        y2 = (y_ctr + box[:, 3] * img_size / 2).clamp(0, img_size)
+
+        boxes = torch.stack([x1, y1, x2, y2], dim=-1)
+
+        boxes_out.append(boxes)
+        scores_out.append(score)
+        labels_out.append(label)
+
+    return boxes_out, scores_out, labels_out
+
 
 def compute_map(stats, gt_counts, num_classes):
     aps = []
@@ -106,12 +121,12 @@ def validate_model(model, dataloader,
             cls_out, obj_out, loc_out = model(images)
 
             # permute to (B, C, H, W)
-            pred_cls = cls_out.permute(0,3,1,2)
-            pred_loc = loc_out.permute(0,3,1,2)
+            # pred_cls = cls_out.permute(0,3,1,2)
+            # pred_loc = loc_out.permute(0,3,1,2)
 
             # decode boxes & scores
             boxes_batch, scores_batch, labels_batch = decode_predictions(
-                pred_loc, pred_cls,
+                loc_out, cls_out, obj_out,
                 conf_thresh=0.5,
                 stride=stride,
                 img_size=img_size
