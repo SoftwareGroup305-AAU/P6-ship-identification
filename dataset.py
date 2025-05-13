@@ -7,7 +7,7 @@ import yaml
 import torchvision.transforms.functional as TF
 
 class YOLOv8Dataset(Dataset):
-    def __init__(self, data_dir, image_set, grid_size, transform: utils.YoloAugment, raw_labels=False):
+    def __init__(self, data_dir, image_set, grid_size, transform: utils.YoloAugment | None = None, raw_labels=False):
         
         with open(os.path.join(data_dir, "data.yaml"), "r") as file:
             config = yaml.safe_load(file)
@@ -59,10 +59,7 @@ class YOLOv8Dataset(Dataset):
 from utils import plot_boxes
 
 if __name__ == "__main__":
-
-    transform = utils.YoloAugment(resize=(448,448), hflip_prob=0.5, rotate_prob=0.3, max_rotate_angle=30, augment=True)
-
-    train_set = YOLOv8Dataset("data/ship-detection-6", "train", grid_size=7, transform=transform)
+    train_set = YOLOv8Dataset("data/ship-detection-11", "train", grid_size=7)
     classlist = train_set.classes
     for data, targets in train_set:
         plot_boxes(data, *targets, conf_threshold=0.5, class_names=classlist)

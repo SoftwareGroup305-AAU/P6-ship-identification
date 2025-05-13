@@ -19,9 +19,9 @@ class Config:
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     NUM_GPUS = torch.cuda.device_count()
     BATCH_SIZE = 32
-    NUM_CLASSES = 6
+    NUM_CLASSES = 11
     LEARNING_RATE = 1e-4
-    EPOCHS = 135
+    EPOCHS = 250
     STRIDE = 64
     VAL_INTERVAL = 10
     CHECKPOINT_INTERVAL = 20
@@ -52,8 +52,8 @@ def main():
     train_transform = utils.YoloAugment(resize=(448,448), hflip_prob=0.5, rotate_prob=0.3, augment=True)
     val_transform = utils.YoloAugment(resize=(448,448))
 
-    train_set = YOLOv8Dataset("data/ship-detection-6", "train", grid_size=7, transform=train_transform)
-    val_set = YOLOv8Dataset("data/ship-detection-6", "val", grid_size=7, transform=val_transform, raw_labels=True)
+    train_set = YOLOv8Dataset("data/ship-detection-11", "train", grid_size=7, transform=train_transform)
+    val_set = YOLOv8Dataset("data/ship-detection-11", "val", grid_size=7, transform=val_transform, raw_labels=True)
 
     train_loader = DataLoader(
         train_set,

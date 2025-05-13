@@ -4,17 +4,14 @@ from dataset import YOLOv8Dataset
 import matplotlib.pyplot as plt
 import numpy as np
 import torchvision.transforms as T
-from utils import plot_boxes
+import utils
 
 
 if __name__ == "__main__":
-    MODEL_DIR = r"weights/final.pth"
+    MODEL_DIR = r"weights/final_6_135_no_aug.pth"
 
-    transform = T.Compose([
-        T.Resize((448, 448)),
-        T.ConvertImageDtype(torch.float)
-    ])
-    train_set = YOLOv8Dataset("data/ship-detection-6", "train", grid_size=7, transform=transform, normalize=False, augment=False)
+    transform = utils.YoloAugment()
+    train_set = YOLOv8Dataset("data/ship-detection-6", "val", grid_size=7, transform=transform)
     classlist = train_set.classes
     model = YOLO(len(classlist))
     model.eval()
@@ -26,4 +23,4 @@ if __name__ == "__main__":
             output = model(data)
             data = data.squeeze(0)
             output = tuple(t.squeeze(0) for t in output)
-            plot_boxes(data, *output, class_names=classlist, conf_threshold=0.5, max_overlap=0.2)
+            utils.plot_boxes(data, *output, class_names=classlist, conf_threshold=0.5, max_overlap=0.5)
