@@ -85,7 +85,7 @@ class CompositeLoss(nn.Module):
     def forward(self, class_predictions, objectness_predictions, localization_predictions,
                 class_targets, objectness_targets, localization_targets):
         
-        class_loss_weight = 0.5
+        class_loss_weight = 1
         objectness_loss_weight = 0.8
         noobject_loss_weight = 0.5
         localization_loss_weight = 5
