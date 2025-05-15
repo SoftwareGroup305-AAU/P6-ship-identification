@@ -53,8 +53,8 @@ def main():
     train_transform = utils.YoloAugment(resize=(448,448), hflip_prob=0.5, rotate_prob=0.3, augment=True)
     val_transform = utils.YoloAugment(resize=(448,448))
 
-    train_set = YOLOv8Dataset("data/ship-detection-6", "train", grid_size=7, num_predictors=Config.NUM_PREDICTORS, transform=train_transform)
-    val_set = YOLOv8Dataset("data/ship-detection-6", "val", grid_size=7, num_predictors=Config.NUM_PREDICTORS, transform=val_transform, raw_labels=True)
+    train_set = YOLOv8Dataset("../glen/data/ship-detection-6", "train", grid_size=7, num_predictors=Config.NUM_PREDICTORS, transform=train_transform)
+    val_set = YOLOv8Dataset("../glen/data/ship-detection-6", "val", grid_size=7, num_predictors=Config.NUM_PREDICTORS, transform=val_transform, raw_labels=True)
 
     train_loader = DataLoader(
         train_set,
@@ -96,16 +96,16 @@ def main():
     #################################
     #              EVAL             #
     #################################
-        if epoch % Config.VAL_INTERVAL == 0:
-            result = validate_model(model, 
-                                    val_loader, 
-                                    Config.DEVICE, 
-                                    iou_thresh=0.5, 
-                                    num_classes=Config.NUM_CLASSES, 
-                                    img_size=Config.IMG_SIZE[0], 
-                                    stride=Config.STRIDE)
-            mAP = result[0]
-            log_msg += f" | Val mAP = {mAP:.10f}"
+        # if epoch % Config.VAL_INTERVAL == 0:
+        #     result = validate_model(model, 
+        #                             val_loader, 
+        #                             Config.DEVICE, 
+        #                             iou_thresh=0.5, 
+        #                             num_classes=Config.NUM_CLASSES, 
+        #                             img_size=Config.IMG_SIZE[0], 
+        #                             stride=Config.STRIDE)
+        #     mAP = result[0]
+        #     log_msg += f" | Val mAP = {mAP:.10f}"
         utils.log_to_file(log_msg, Config.LOG_FILE_PATH)
 
     #################################

@@ -118,7 +118,7 @@ def plot_boxes(image_tensor, class_target, objectness_target, localization_targe
                 y2 = y + bh / 2
 
                 if class_names:
-                    class_idx = class_target[i, j, b].argmax().item()
+                    class_idx = class_target[i, j].argmax().item()
                 else:
                     class_idx = -1
 
