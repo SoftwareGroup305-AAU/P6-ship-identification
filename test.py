@@ -8,10 +8,10 @@ import utils
 
 
 if __name__ == "__main__":
-    MODEL_DIR = r"weights/final_6_135_no_aug.pth"
+    MODEL_DIR = r"weights/final_11_250_aug.pth"
 
     transform = utils.YoloAugment()
-    train_set = YOLOv8Dataset("data/ship-detection-6", "val", grid_size=7, transform=transform)
+    train_set = YOLOv8Dataset("data/ship-detection-11", "val", grid_size=7, transform=transform)
     classlist = train_set.classes
     model = YOLO(len(classlist))
     model.eval()
