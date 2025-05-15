@@ -6,7 +6,7 @@ import utils
 import yaml
 import torchvision.transforms.functional as TF
 
-class YOLOv8Dataset(Dataset):
+class YOLODataset(Dataset):
     def __init__(self, data_dir, image_set, grid_size, transform: utils.YoloAugment | None = None, raw_labels=False):
         
         with open(os.path.join(data_dir, "data.yaml"), "r") as file:

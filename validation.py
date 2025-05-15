@@ -9,6 +9,7 @@ from torchvision import transforms
 from torchvision.ops import nms
 from models import YOLO
 from tqdm import tqdm
+from dataset import YOLODataset
 
 def collate_fn(batch):
     images, targets = zip(*batch)
@@ -100,6 +101,9 @@ def validate_model(model, dataloader,
     conf_mat = torch.zeros((num_classes, num_classes), dtype=torch.int32)
 
     with torch.no_grad():
+        avg_iou = 0
+        iou_count = 0
+
         for images, targets in tqdm(dataloader, desc="Val"):
             images = images.to(device)
             # your model returns (cls_out, obj_out, loc_out)
@@ -147,7 +151,7 @@ def validate_model(model, dataloader,
                 matched = set()
                 for pb, ps, pc in zip(boxes, scores, labels):
                     # IoU w/ all GT
-                    ious = ( 
+                    intersection = ( 
                         (torch.min(pb[2], gt_boxes[:,2]) - torch.max(pb[0], gt_boxes[:,0]))
                         .clamp(0) *
                         (torch.min(pb[3], gt_boxes[:,3]) - torch.max(pb[1], gt_boxes[:,1]))
@@ -155,10 +159,14 @@ def validate_model(model, dataloader,
                     )
                     area1 = (pb[2]-pb[0])*(pb[3]-pb[1])
                     area2 = (gt_boxes[:,2]-gt_boxes[:,0])*(gt_boxes[:,3]-gt_boxes[:,1])
-                    union = area1 + area2 - ious + 1e-6
-                    iou_vals = ious/union
+                    union = area1 + area2 - intersection + 1e-6
+                    iou_vals = intersection/union
 
                     best_iou, best_idx = iou_vals.max(0)
+
+                    avg_iou += best_iou
+                    iou_count += 1
+
                     is_tp = best_iou >= iou_thresh and best_idx.item() not in matched
 
                     stats[pc.item()].append((ps.item(), int(is_tp)))
@@ -173,6 +181,7 @@ def validate_model(model, dataloader,
                 for cls in gt_labels.tolist():
                     gt_counts[cls] += 1
                     gt_count_total += 1
+        print("avg iou: ", best_iou / iou_count)
 
     mAP, log = compute_map(stats, gt_counts, num_classes)
     agn_stats = defaultdict(list)
