@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torchvision.transforms as T
 from torch.utils.data import DataLoader
 from models import YOLO
 from dataset import YOLOv8Dataset
@@ -19,9 +18,9 @@ class Config:
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     NUM_GPUS = torch.cuda.device_count()
     BATCH_SIZE = 32
-    NUM_CLASSES = 11
-    LEARNING_RATE = 1e-4
-    EPOCHS = 250
+    NUM_CLASSES = 6
+    LEARNING_RATE = 1e-5
+    EPOCHS = 200
     STRIDE = 64
     VAL_INTERVAL = 10
     CHECKPOINT_INTERVAL = 20
@@ -29,6 +28,22 @@ class Config:
     LOG_FILE_PATH = "log.txt"
     WEIGHT_DIR = "weights"
     NUM_WORKERS = 8
+
+def adjust_learning_rate(optimizer, epoch, base_lr):
+    if epoch == 0:
+        lr = base_lr
+    elif 1 <= epoch <= 7:
+        lr = base_lr + 0.00002
+    elif 8 <= epoch <= 58:
+        lr = 0.0001
+    elif 59 <= epoch <= 118:
+        lr = 0.00001
+    else:
+        lr = 0.000001
+
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+    return lr
 
 def main():
     #################################
@@ -49,11 +64,11 @@ def main():
         model.parameters(),
         lr=Config.LEARNING_RATE
     )
-    train_transform = utils.YoloAugment(resize=(448,448), hflip_prob=0.5, rotate_prob=0.3, augment=True)
+    train_transform = utils.YoloAugment(resize=(448,448), hflip_prob=0.5,augment=True)
     val_transform = utils.YoloAugment(resize=(448,448))
 
-    train_set = YOLOv8Dataset("data/ship-detection-11", "train", grid_size=7, transform=train_transform)
-    val_set = YOLOv8Dataset("data/ship-detection-11", "val", grid_size=7, transform=val_transform, raw_labels=True)
+    train_set = YOLOv8Dataset("data/ship-detection-6", "train", grid_size=7, transform=train_transform)
+    val_set = YOLOv8Dataset("data/ship-detection-6", "val", grid_size=7, transform=val_transform, raw_labels=True)
 
     train_loader = DataLoader(
         train_set,
@@ -87,9 +102,10 @@ def main():
             loss.backward()
             optimizer.step()
             train_loss += loss.item() / len(train_loader)
-            train_prog_bar.set_postfix(loss=loss.item())
+            train_prog_bar.set_postfix(loss=loss.item())    
+        lr = adjust_learning_rate(optimizer, epoch, Config.LEARNING_RATE)
         log_msg = f"Epoch {epoch}: Train Loss = {train_loss:.4f}"
-        log_msg += f" | LR = {Config.LEARNING_RATE:.6f}"
+        log_msg += f" | LR = {lr:.6f}"
         del data, targets
 
     #################################
