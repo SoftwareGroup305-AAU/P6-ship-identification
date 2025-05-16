@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from models import YOLO
-from dataset import YOLOv8Dataset
+from dataset import YOLODataset
 from loss import CompositeLoss
 from tqdm import tqdm
 from validation import validate_model
@@ -67,8 +67,8 @@ def main():
     train_transform = utils.YoloAugment(resize=(448,448), hflip_prob=0.5,augment=True)
     val_transform = utils.YoloAugment(resize=(448,448))
 
-    train_set = YOLOv8Dataset("data/ship-detection-6", "train", grid_size=7, transform=train_transform)
-    val_set = YOLOv8Dataset("data/ship-detection-6", "val", grid_size=7, transform=val_transform, raw_labels=True)
+    train_set = YOLODataset("data/ship-detection-6", "train", grid_size=7, transform=train_transform)
+    val_set = YOLODataset("data/ship-detection-6", "val", grid_size=7, transform=val_transform, raw_labels=True)
 
     train_loader = DataLoader(
         train_set,

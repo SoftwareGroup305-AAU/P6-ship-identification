@@ -202,7 +202,7 @@ def run_all_validations():
         transforms.Resize((img_size, img_size)),
         transforms.ToTensor()
     ])
-    dataset    = YOLODataset("../data/valid/images", "../data/valid/labels", val_tfms)
+    dataset    = YOLODataset("data", "data", val_tfms)
     dataloader = DataLoader(dataset, batch_size=32,
                             shuffle=True,
                             collate_fn=collate_fn)

@@ -2,37 +2,6 @@ import torch
 import torch.nn as nn
 import math
     
-class GIoULoss(nn.Module):
-    def forward(self, prediction, target):
-        x1 = torch.min(prediction[:, 0], target[:, 0])
-        y1 = torch.min(prediction[:, 1], target[:, 1])
-        x2 = torch.max(prediction[:, 2], target[:, 2])
-        y2 = torch.max(prediction[:, 3], target[:, 3])
-
-        intersection_width = (x2 - x1).clamp(0)
-        intersection_height = (y2 - y1).clamp(0)
-        intersection = intersection_width * intersection_height
-
-        predicted_area = (prediction[:, 2] - prediction[:, 0]) * (prediction[:, 3] - prediction[:, 1])
-        target_area = (target[:, 2] - target[:, 0]) * (target[:, 3] - target[:, 1])
-        union = predicted_area + target_area - intersection
-
-        iou = intersection / (union + 1e-6)
-
-        enclosing_x1 = torch.min(prediction[:, 0], target[:, 0])
-        enclosing_y1 = torch.min(prediction[:, 1], target[:, 1])
-        enclosing_x2 = torch.max(prediction[:, 2], target[:, 2])
-        enclosing_y2 = torch.max(prediction[:, 3], target[:, 3])
-
-        enclosing_width = (enclosing_x2 - enclosing_x1).clamp(0)
-        enclosing_height = (enclosing_y2 - enclosing_y1).clamp(0)
-        c = enclosing_width * enclosing_height
-
-        giou = iou - (c - union) / (c + 1e-6)
-        loss = 1 - giou
-        loss = loss.clamp(min=0)
-        return loss.mean()
-    
 class CIoULoss(nn.Module):
     def forward(self, prediction, target):
         pred_cx = (prediction[:, 0] + prediction[:, 2]) / 2
@@ -68,7 +37,6 @@ class CIoULoss(nn.Module):
         enc_y2 = torch.max(prediction[:, 3], target[:, 3])
         enc_diag = ((enc_x2 - enc_x1) ** 2 + (enc_y2 - enc_y1) ** 2).clamp(min=1e-7)
 
-        # aspect ratio penalty, hopefully
         aspect_ratio_penalty = (4 / (math.pi ** 2)) * torch.pow(torch.atan(target_w / target_h) - torch.atan(pred_w / pred_h), 2)
         with torch.no_grad():
             alpha = aspect_ratio_penalty / (1 - iou + aspect_ratio_penalty + 1e-7)
@@ -82,7 +50,6 @@ class CompositeLoss(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
         self.ciou_loss = CIoULoss()
-        self.giou_loss = GIoULoss()
         self.mse_loss = nn.MSELoss()
         self.bce_loss = nn.BCEWithLogitsLoss()
 

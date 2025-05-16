@@ -60,7 +60,7 @@ from utils import plot_boxes
 
 if __name__ == "__main__":
     augment = utils.YoloAugment(resize=(448,448), rotate_prob=0.8, max_rotate_angle=50)
-    train_set = YOLOv8Dataset("data/ship-detection-6-neg", "train", grid_size=7, transform=augment)
+    train_set = YOLODataset("data/ship-detection-6-neg", "train", grid_size=7, transform=augment)
     classlist = train_set.classes
     for data, targets in train_set:
         plot_boxes(data, *targets, conf_threshold=0.5, class_names=classlist)
