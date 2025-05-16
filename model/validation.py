@@ -100,6 +100,9 @@ def validate_model(model, dataloader,
     conf_mat = torch.zeros((num_classes, num_classes), dtype=torch.int32)
 
     with torch.no_grad():
+        iou_sum = 0
+        iou_count = 0
+
         for images, targets in dataloader:
             images = images.to(device)
             # your model returns (cls_out, obj_out, loc_out)
@@ -159,6 +162,8 @@ def validate_model(model, dataloader,
                     iou_vals = ious/union
 
                     best_iou, best_idx = iou_vals.max(0)
+                    iou_sum += best_iou
+                    iou_count += 1
                     is_tp = best_iou >= iou_thresh and best_idx.item() not in matched
 
                     stats[pc.item()].append((ps.item(), int(is_tp)))
@@ -173,6 +178,8 @@ def validate_model(model, dataloader,
                 for cls in gt_labels.tolist():
                     gt_counts[cls] += 1
                     gt_count_total += 1
+
+        print("Average IoU: ", iou_sum / iou_count)
 
     mAP, log = compute_map(stats, gt_counts, num_classes)
     agn_stats = defaultdict(list)
