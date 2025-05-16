@@ -1,5 +1,7 @@
 .venv
-data
+data/test
+data/train
+data/valid
 weights
 log.txt
 logs
