@@ -89,7 +89,7 @@ def compute_map(stats, gt_counts, num_classes):
 
 def validate_model(model, dataloader,
                    device='cpu', iou_thresh=0.5,
-                   num_classes=6,        # match your train.py
+                   num_classes=6, 
                    img_size=448,
                    stride=64):
     model.to(device).eval()
@@ -199,7 +199,6 @@ def run_all_validations():
                             collate_fn=collate_fn)
 
     model = YOLO(num_classes=num_classes)
-    # load your checkpoint here...
     ckpt = torch.load("initial_yolo_last.pth", map_location=device)
     model.load_state_dict(ckpt['model_state_dict'])
     model.to(device)

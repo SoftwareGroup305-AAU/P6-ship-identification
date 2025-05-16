@@ -88,7 +88,7 @@ class CompositeLoss(nn.Module):
         self.bce_loss = nn.BCEWithLogitsLoss()
 
     def forward(self, class_predictions, objectness_predictions, localization_predictions, targets, device):
-        class_loss_weight = 0.5
+        class_loss_weight = 1
         objectness_loss_weight = 0.8
         noobject_loss_weight = 0.5
         localization_loss_weight = 5
