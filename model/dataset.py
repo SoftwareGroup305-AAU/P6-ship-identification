@@ -16,21 +16,23 @@ class YOLODataset(Dataset):
     def __getitem__(self, index):
         image_file = self.image_files[index]
         image_path = os.path.join(self.image_dir, image_file)
-        image = read_image(image_path) # could normalize, dont know if necessary after transform
-        
+        image = read_image(image_path)  # Tensor CHW, no normalization needed here
+
         label_path = os.path.join(self.label_dir, os.path.splitext(image_file)[0] + ".txt")
         target = []
         if os.path.exists(label_path):
             with open(label_path, "r") as file:
                 for line in file:
-                    values = [float(value) for value in line.split()]
+                    values = [float(v) for v in line.split()]
                     target.append(values)
+
         if target:
             target = torch.tensor(target, dtype=torch.float32)
         else:
             target = torch.zeros((0, 5))
-        
+
         if self.transform:
             image = self.transform(image)
-        
+
         return image, target
+

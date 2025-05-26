@@ -117,8 +117,25 @@ def validate_model(model, dataloader,
                 if len(boxes) == 0:
                     continue
 
-                keep = nms(boxes, scores, iou_thresh)
-                boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
+                # keep = nms(boxes, scores, iou_thresh)
+                # boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
+
+                final_boxes = []
+                final_scores = []
+                final_labels = []
+                for cls in labels.unique():
+                    cls_mask = labels == cls
+                    cls_boxes = boxes[cls_mask]
+                    cls_scores = scores[cls_mask]
+                    keep = nms(cls_boxes, cls_scores, iou_thresh)
+                    final_boxes.append(cls_boxes[keep])
+                    final_scores.append(cls_scores[keep])
+                    final_labels.append(labels[cls_mask][keep])
+
+                boxes = torch.cat(final_boxes)
+                scores = torch.cat(final_scores)
+                labels = torch.cat(final_labels)
+
 
                 gt_boxes, gt_labels = [], []
                 for cls_id, cx, cy, w, h in targets[i]:
@@ -179,7 +196,7 @@ def run_all_validations():
     device      = "cuda" if torch.cuda.is_available() else "cpu"
     num_classes = 6
     img_size    = 640
-    stride      = 64  # img_size / feature_map_size
+    stride      = 64
 
     val_tfms = transforms.Compose([
         transforms.ToPILImage(),
@@ -187,28 +204,29 @@ def run_all_validations():
         transforms.ToTensor()
     ])
     dataset    = YOLODataset("../data/valid/images", "../data/valid/labels", val_tfms)
-    dataloader = DataLoader(dataset, batch_size=32,
-                            shuffle=True,
-                            collate_fn=collate_fn)
+    dataloader = DataLoader(dataset, batch_size=32, shuffle=True, collate_fn=collate_fn)
 
     model = YOLO(num_classes=num_classes)
-    ckpt = torch.load("last_adv.pth", map_location=device)
+    ckpt = torch.load("last.pth", map_location=device)
     model.load_state_dict(ckpt['model_state_dict'])
-    # model.load_state_dict(ckpt)
     model.to(device)
 
-    mAP, cls_log, map_agn, agn_log, conf_mat = validate_model(
-        model, dataloader,
-        device=device,
-        iou_thresh=0.5,
-        num_classes=num_classes,
-        img_size=img_size,
-        stride=stride
-    )
+    for iou_thresh in [0.5, 0.90]:
+        print(f"\nmAP@{iou_thresh:.2f}")
 
-    print(cls_log)
-    print("\nClass-agnostic mAP@0.5:\n", agn_log)
-    print("\nConfusion matrix:\n", conf_mat)
+        mAP, cls_log, map_agn, agn_log, conf_mat = validate_model(
+            model, dataloader,
+            device=device,
+            iou_thresh=iou_thresh,
+            num_classes=num_classes,
+            img_size=img_size,
+            stride=stride
+        )
+
+        print(cls_log)
+        print("\nClass-agnostic mAP@{:.2f}:\n{}".format(iou_thresh, agn_log))
+        print("\nConfusion matrix:\n", conf_mat)
+
 
 if __name__ == "__main__":
     run_all_validations()

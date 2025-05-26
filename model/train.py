@@ -6,6 +6,7 @@ from torchvision import transforms
 from utilities import CompositeLoss
 from dataset import YOLODataset
 from core import YOLO
+from transform import CustomYOLOTransform
 from collections import Counter
 import numpy as np
 
@@ -33,7 +34,7 @@ train_transforms = transforms.Compose([
         transforms.RandomRotation(15),
         transforms.RandomAffine(degrees=10, scale=(0.7, 1.3), shear=10),
         transforms.GaussianBlur(kernel_size=3),
-    ], p=0.7),
+    ], p=0.85),
     transforms.RandomHorizontalFlip(),
     transforms.RandomPerspective(distortion_scale=0.5, p=0.3),
     transforms.RandomResizedCrop(640, scale=(0.7, 1.0)),
@@ -45,7 +46,7 @@ def collate_fn(batch):
     images = torch.stack(images)
     return images, list(targets)
 
-training_data = YOLODataset(Config.TRAIN_IMAGES_DIR, Config.TRAIN_LABELS_DIR, train_transforms)
+training_data = YOLODataset(Config.TRAIN_IMAGES_DIR, Config.TRAIN_LABELS_DIR, transform=CustomYOLOTransform(size=640))
 
 labels = []
 for _, target in training_data:
@@ -59,8 +60,11 @@ weights = {cls: total/count for cls, count in label_counts.items()}
 sample_weights = []
 for _, target in training_data:
     cls_ids = [int(t[0]) for t in target]
-    avg_weight = np.mean([weights[cls] for cls in cls_ids])
-    sample_weights.append(avg_weight)
+    if len(cls_ids) == 0:
+        sample_weights.append(0)
+    else:
+        avg_weight = np.mean([weights[cls] for cls in cls_ids])
+        sample_weights.append(avg_weight)
 
 sampler = torch.utils.data.WeightedRandomSampler(sample_weights, len(sample_weights), replacement=True)
 
