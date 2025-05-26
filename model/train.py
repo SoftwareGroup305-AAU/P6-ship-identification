@@ -29,7 +29,9 @@ train_transforms = transforms.Compose([
     transforms.RandomHorizontalFlip(),
     transforms.ColorJitter(brightness=0.2, contrast=0.2),
     transforms.RandomRotation(10),
-    transforms.RandomCrop(640, padding=4),
+    transforms.GaussianBlur(kernel_size=5),
+    transforms.RandomAffine(degrees=10, scale=(0.8, 1.2), shear=5),
+    transforms.RandomCrop(448, padding=4),
     transforms.ToTensor()
 ])
 
@@ -49,9 +51,7 @@ print(f"Using { 1 if gpu_count >= 1 else 0} GPUs")
 optimizer = optim.Adam(model.parameters(), lr=Config.INITIAL_LEARNING_RATE)
 criterion = CompositeLoss(Config.NUM_CLASSES)
 
-epochs = 50
-
-def train(model, dataloader, optimizer, criterion, device, epochs):
+def train(model, dataloader, optimizer, criterion, device):
     best_loss = float('inf')
     model.train()
     
@@ -123,6 +123,6 @@ def train(model, dataloader, optimizer, criterion, device, epochs):
                 'loss': best_loss,
             }, Config.SAVE_PATH_BEST)
 
-train(model, dataloader, optimizer, criterion, device, epochs)
+train(model, dataloader, optimizer, criterion, device)
 
 torch.save(model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict(), "expanded.pth")
