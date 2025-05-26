@@ -6,6 +6,8 @@ from torchvision import transforms
 from utilities import CompositeLoss
 from dataset import YOLODataset
 from core import YOLO
+from collections import Counter
+import numpy as np
 
 class Config:
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -15,24 +17,27 @@ class Config:
     NUM_CLASSES = 6
     NUM_BBOXES = 2
     INITIAL_LEARNING_RATE = 0.00001
-    EPOCHS = 135
-    SAVE_PATH_BEST = "initial_yolo_best.pth"
-    SAVE_PATH_LAST = "initial_yolo_last.pth"
-    SAVE_PATH_FINAL = "initial_yolo.pth"
+    EPOCHS = 120
+    SAVE_PATH_BEST = "best.pth"
+    SAVE_PATH_LAST = "last.pth"
+    SAVE_PATH_FINAL = "final.pth"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"device: {device}")
 
 train_transforms = transforms.Compose([
     transforms.ToPILImage(),
-    transforms.Resize((448, 448)),
+    transforms.Resize((640, 640)),
+    transforms.RandomApply([
+        transforms.ColorJitter(0.4, 0.4, 0.4, 0.1),
+        transforms.RandomRotation(15),
+        transforms.RandomAffine(degrees=10, scale=(0.7, 1.3), shear=10),
+        transforms.GaussianBlur(kernel_size=3),
+    ], p=0.7),
     transforms.RandomHorizontalFlip(),
-    transforms.ColorJitter(brightness=0.2, contrast=0.2),
-    transforms.RandomRotation(10),
-    transforms.GaussianBlur(kernel_size=5),
-    transforms.RandomAffine(degrees=10, scale=(0.8, 1.2), shear=5),
-    transforms.RandomCrop(448, padding=4),
-    transforms.ToTensor()
+    transforms.RandomPerspective(distortion_scale=0.5, p=0.3),
+    transforms.RandomResizedCrop(640, scale=(0.7, 1.0)),
+    transforms.ToTensor(),
 ])
 
 def collate_fn(batch):
@@ -41,7 +46,25 @@ def collate_fn(batch):
     return images, list(targets)
 
 training_data = YOLODataset(Config.TRAIN_IMAGES_DIR, Config.TRAIN_LABELS_DIR, train_transforms)
-dataloader = DataLoader(training_data, batch_size=Config.BATCH_SIZE, shuffle=True, collate_fn=collate_fn) 
+
+labels = []
+for _, target in training_data:
+    for t in target:
+        labels.append(int(t[0]))
+
+label_counts = Counter(labels)
+total = sum(label_counts.values())
+weights = {cls: total/count for cls, count in label_counts.items()}
+
+sample_weights = []
+for _, target in training_data:
+    cls_ids = [int(t[0]) for t in target]
+    avg_weight = np.mean([weights[cls] for cls in cls_ids])
+    sample_weights.append(avg_weight)
+
+sampler = torch.utils.data.WeightedRandomSampler(sample_weights, len(sample_weights), replacement=True)
+
+dataloader = DataLoader(training_data, batch_size=Config.BATCH_SIZE, sampler=sampler, collate_fn=collate_fn)
 
 model = YOLO(Config.NUM_CLASSES)
 model.to(device)
@@ -66,7 +89,7 @@ def train(model, dataloader, optimizer, criterion, device):
             lr += 0.00002
         elif epoch > 5 and epoch <= 40:
             lr = 0.0001
-        elif epoch > 40 and epoch <= 80:
+        elif epoch > 40 and epoch <= 60:
             lr = 0.00001
         else:
             lr = 0.000001
@@ -98,13 +121,11 @@ def train(model, dataloader, optimizer, criterion, device):
                       f"Loss: {avg_loss:.3f}")
                 running_loss = 0.0
         
-        # Epoch summary
         epoch_avg_loss = epoch_loss / len(dataloader)
         print(f"Epoch [{epoch+1}/{Config.EPOCHS}] "
               f"Average Loss: {epoch_avg_loss:.3f} "
               f"Learning Rate: {lr}")
         
-        # Save checkpoints
         state_dict = model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict()
         torch.save({
             'epoch': epoch,
@@ -125,4 +146,4 @@ def train(model, dataloader, optimizer, criterion, device):
 
 train(model, dataloader, optimizer, criterion, device)
 
-torch.save(model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict(), "yolo_custom.pth")
+torch.save(model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict(), "model.pth")

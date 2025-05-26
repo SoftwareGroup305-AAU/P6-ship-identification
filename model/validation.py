@@ -1,9 +1,6 @@
 import torch
-import torch.nn.functional as F
-from pathlib import Path
 from collections import defaultdict
 import numpy as np
-import pandas as pd
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.ops import nms
@@ -17,8 +14,8 @@ def collate_fn(batch):
 
 def decode_predictions(pred_loc, pred_cls,
                        conf_thresh=0.5,
-                       stride=64,   # your network’s down-sampling factor
-                       img_size=448):
+                       stride=64,
+                       img_size=640):
     """
     pred_loc:  (B, 4, H, W)  — four normalized [0,1] offsets: (l, t, r, b)
     pred_cls:  (B, C, H, W) — raw logits
@@ -26,7 +23,6 @@ def decode_predictions(pred_loc, pred_cls,
     B, C, H, W = pred_cls.shape
     device = pred_cls.device
 
-    # precompute grid centers
     shifts_x = (torch.arange(W, device=device) + 0.5) * stride
     shifts_y = (torch.arange(H, device=device) + 0.5) * stride
     grid_y, grid_x = torch.meshgrid(shifts_y, shifts_x, indexing="ij")
@@ -35,23 +31,18 @@ def decode_predictions(pred_loc, pred_cls,
 
     all_boxes, all_scores, all_labels = [], [], []
     for b in range(B):
-        # 1) class scores
-        cls_prob = torch.sigmoid(pred_cls[b]).view(C, -1)     # (C, H*W)
-        scores, labels = cls_prob.max(dim=0)                  # best class per cell
+        cls_prob = torch.sigmoid(pred_cls[b]).view(C, -1)
+        scores, labels = cls_prob.max(dim=0)
 
-        # 2) bbox offsets in pixels
-        loc = pred_loc[b].view(4, -1)                         # (4, H*W)
-        # assume l,t,r,b are normalized to [0,1] of the whole image:
-        loc_px = loc * img_size                              # scale to pixels
+        loc = pred_loc[b].view(4, -1)
+        loc_px = loc * img_size
         l, t, r, b_ = loc_px
 
-        # 3) corner coordinates
         x1 = (grid_x - l).clamp(0, img_size)
         y1 = (grid_y - t).clamp(0, img_size)
         x2 = (grid_x + r).clamp(0, img_size)
         y2 = (grid_y + b_).clamp(0, img_size)
 
-        # 4) filter by confidence + size
         keep = (scores > conf_thresh) & ((x2 - x1) > 1) & ((y2 - y1) > 1)
         idxs = keep.nonzero(as_tuple=False).squeeze(1)
 
@@ -90,7 +81,7 @@ def compute_map(stats, gt_counts, num_classes):
 def validate_model(model, dataloader,
                    device='cpu', iou_thresh=0.5,
                    num_classes=6, 
-                   img_size=448,
+                   img_size=640,
                    stride=64):
     model.to(device).eval()
     stats = defaultdict(list)
@@ -105,14 +96,12 @@ def validate_model(model, dataloader,
 
         for images, targets in dataloader:
             images = images.to(device)
-            # your model returns (cls_out, obj_out, loc_out)
             cls_out, obj_out, loc_out = model(images)
 
             # permute to (B, C, H, W)
             pred_cls = cls_out.permute(0,3,1,2)
             pred_loc = loc_out.permute(0,3,1,2)
 
-            # decode boxes & scores
             boxes_batch, scores_batch, labels_batch = decode_predictions(
                 pred_loc, pred_cls,
                 conf_thresh=0.5,
@@ -128,11 +117,9 @@ def validate_model(model, dataloader,
                 if len(boxes) == 0:
                     continue
 
-                # NMS
                 keep = nms(boxes, scores, iou_thresh)
                 boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
 
-                # build GT
                 gt_boxes, gt_labels = [], []
                 for cls_id, cx, cy, w, h in targets[i]:
                     x1 = (cx - w/2) * img_size
@@ -149,7 +136,6 @@ def validate_model(model, dataloader,
 
                 matched = set()
                 for pb, ps, pc in zip(boxes, scores, labels):
-                    # IoU w/ all GT
                     ious = ( 
                         (torch.min(pb[2], gt_boxes[:,2]) - torch.max(pb[0], gt_boxes[:,0]))
                         .clamp(0) *
@@ -192,7 +178,7 @@ def validate_model(model, dataloader,
 def run_all_validations():
     device      = "cuda" if torch.cuda.is_available() else "cpu"
     num_classes = 6
-    img_size    = 448
+    img_size    = 640
     stride      = 64  # img_size / feature_map_size
 
     val_tfms = transforms.Compose([
@@ -206,8 +192,9 @@ def run_all_validations():
                             collate_fn=collate_fn)
 
     model = YOLO(num_classes=num_classes)
-    ckpt = torch.load("initial_yolo_last.pth", map_location=device)
+    ckpt = torch.load("last_adv.pth", map_location=device)
     model.load_state_dict(ckpt['model_state_dict'])
+    # model.load_state_dict(ckpt)
     model.to(device)
 
     mAP, cls_log, map_agn, agn_log, conf_mat = validate_model(
