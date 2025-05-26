@@ -15,21 +15,21 @@ class Config:
     NUM_CLASSES = 6
     NUM_BBOXES = 2
     INITIAL_LEARNING_RATE = 0.00001
-    EPOCHS = 135
-    SAVE_PATH_BEST = "initial_yolo_best.pth"
-    SAVE_PATH_LAST = "initial_yolo_last.pth"
-    SAVE_PATH_FINAL = "initial_yolo.pth"
+    EPOCHS = 120
+    SAVE_PATH_BEST = "expanded_best.pth"
+    SAVE_PATH_LAST = "expanded_last.pth"
+    SAVE_PATH_FINAL = "expanded_final.pth"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"device: {device}")
 
 train_transforms = transforms.Compose([
     transforms.ToPILImage(),
-    transforms.Resize((448, 448)),
+    transforms.Resize((640, 640)),
     transforms.RandomHorizontalFlip(),
     transforms.ColorJitter(brightness=0.2, contrast=0.2),
     transforms.RandomRotation(10),
-    transforms.RandomCrop(448, padding=4),
+    transforms.RandomCrop(640, padding=4),
     transforms.ToTensor()
 ])
 
@@ -125,4 +125,4 @@ def train(model, dataloader, optimizer, criterion, device, epochs):
 
 train(model, dataloader, optimizer, criterion, device, epochs)
 
-torch.save(model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict(), "yolo_custom.pth")
+torch.save(model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict(), "expanded.pth")

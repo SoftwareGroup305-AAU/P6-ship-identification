@@ -18,7 +18,7 @@ def collate_fn(batch):
 def decode_predictions(pred_loc, pred_cls,
                        conf_thresh=0.5,
                        stride=64,   # your network’s down-sampling factor
-                       img_size=448):
+                       img_size=640):
     """
     pred_loc:  (B, 4, H, W)  — four normalized [0,1] offsets: (l, t, r, b)
     pred_cls:  (B, C, H, W) — raw logits
@@ -90,7 +90,7 @@ def compute_map(stats, gt_counts, num_classes):
 def validate_model(model, dataloader,
                    device='cpu', iou_thresh=0.5,
                    num_classes=6,        # match your train.py
-                   img_size=448,
+                   img_size=640,
                    stride=64):
     model.to(device).eval()
     stats = defaultdict(list)
@@ -100,6 +100,8 @@ def validate_model(model, dataloader,
     conf_mat = torch.zeros((num_classes, num_classes), dtype=torch.int32)
 
     with torch.no_grad():
+        avg_iou = 0
+        iou_count = 0
         for images, targets in dataloader:
             images = images.to(device)
             # your model returns (cls_out, obj_out, loc_out)
@@ -147,7 +149,7 @@ def validate_model(model, dataloader,
                 matched = set()
                 for pb, ps, pc in zip(boxes, scores, labels):
                     # IoU w/ all GT
-                    ious = ( 
+                    intersection = ( 
                         (torch.min(pb[2], gt_boxes[:,2]) - torch.max(pb[0], gt_boxes[:,0]))
                         .clamp(0) *
                         (torch.min(pb[3], gt_boxes[:,3]) - torch.max(pb[1], gt_boxes[:,1]))
@@ -155,10 +157,14 @@ def validate_model(model, dataloader,
                     )
                     area1 = (pb[2]-pb[0])*(pb[3]-pb[1])
                     area2 = (gt_boxes[:,2]-gt_boxes[:,0])*(gt_boxes[:,3]-gt_boxes[:,1])
-                    union = area1 + area2 - ious + 1e-6
-                    iou_vals = ious/union
+                    union = area1 + area2 - intersection + 1e-6
+                    iou_vals = intersection/union
 
                     best_iou, best_idx = iou_vals.max(0)
+
+                    avg_iou += best_iou
+                    iou_count += 1
+
                     is_tp = best_iou >= iou_thresh and best_idx.item() not in matched
 
                     stats[pc.item()].append((ps.item(), int(is_tp)))
@@ -174,6 +180,8 @@ def validate_model(model, dataloader,
                     gt_counts[cls] += 1
                     gt_count_total += 1
 
+        print("Average IoU: ", avg_iou/iou_count)
+
     mAP, log = compute_map(stats, gt_counts, num_classes)
     agn_stats = defaultdict(list)
     for score, tp in stats_agn:
@@ -185,7 +193,7 @@ def validate_model(model, dataloader,
 def run_all_validations():
     device      = "cuda" if torch.cuda.is_available() else "cpu"
     num_classes = 6
-    img_size    = 448
+    img_size    = 640
     stride      = 64  # img_size / feature_map_size
 
     val_tfms = transforms.Compose([
@@ -200,8 +208,9 @@ def run_all_validations():
 
     model = YOLO(num_classes=num_classes)
     # load your checkpoint here...
-    ckpt = torch.load("initial_yolo_last.pth", map_location=device)
-    model.load_state_dict(ckpt['model_state_dict'])
+    ckpt = torch.load("expanded_last.pth", map_location=device)
+    # model.load_state_dict(ckpt['model_state_dict'])
+    model.load_state_dict(ckpt)
     model.to(device)
 
     mAP, cls_log, map_agn, agn_log, conf_mat = validate_model(

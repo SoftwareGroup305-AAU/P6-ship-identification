@@ -27,3 +27,9 @@ model/initial_yolo_last_func.pth
 model/initial_yolo_last_functional.pth
 model/initial_yolo_last_funky.pth
 model/initial_yolo_last_old.pth
+model/epoch_100.pth
+model/final_ol.pth
+model/final.pth
+model/__pycache__/core.cpython-311.pyc
+model/__pycache__/dataset.cpython-311.pyc
+model/__pycache__/utilities.cpython-311.pyc

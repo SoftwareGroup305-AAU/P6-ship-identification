@@ -27,6 +27,10 @@ class Backbone(nn.Module):
             nn.MaxPool2d(2, 2),
             ConvBlock(256, 512, 3, 1, 1),
             nn.MaxPool2d(2, 2),
+            ConvBlock(512, 768, 3, 1, 1),
+            nn.MaxPool2d(2, 2),
+            ConvBlock(768, 1024, 3, 1, 1),
+            nn.MaxPool2d(2, 2),
         )
 
     def forward(self, images):
@@ -35,7 +39,7 @@ class Backbone(nn.Module):
 class Head(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
-        self.conv = nn.Conv2d(512, 128, 3, padding=1)
+        self.conv = nn.Conv2d(1024, 128, 3, padding=1)
         self.classification = nn.Conv2d(128, num_classes, 1)
         self.objectness = nn.Conv2d(128, 1, 1)
         self.localization = nn.Conv2d(128, 4, 1)
